@@ -1,10 +1,12 @@
 use std::{collections::HashSet, fmt, hash::Hash};
 
+use crate::dates::DateRange;
+
 /// An event somewhere, at some time.
 #[derive(Debug, Clone)]
 pub struct Event {
     pub title: String,
-    pub date: Option<String>,
+    pub date: Option<DateRange>,
     pub locations: Locations,
 }
 
@@ -14,7 +16,7 @@ impl fmt::Display for Event {
         let date = self
             .date
             .as_ref()
-            .map_or("".to_string(), |d| format!(" @ {d}"));
+            .map_or("".to_string(), |d| format!(", {d}"));
 
         let location = if self.locations.is_empty() {
             "".to_string()

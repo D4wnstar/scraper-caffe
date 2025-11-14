@@ -1,25 +1,36 @@
+mod dates;
 mod events;
 
 use std::{collections::HashSet, time::Duration};
 
 use anyhow::Result;
+use chrono::Days;
 use convert_case::{Case, Casing};
 use reqwest::{self, Client};
 use scraper::{Html, Selector};
 
-use crate::events::{Event, Locations};
+use crate::{
+    dates::{DateRange, parse_rossetti_date},
+    events::{Event, Locations},
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let client = Client::new();
 
     let movies = fetch_movies(&client).await?;
+    let shows = fetch_theaters(&client).await?;
 
     println!("--- QUESTA SETTIMANA A TRIESTE ---");
     println!("(Questa lista è generata automaticamente e potrebbe contenere errori o duplicati)");
-    println!("\n-- Film --");
+    println!("\n-- FILM --");
     for event in movies {
-        println!("{}", event);
+        println!("- {event}");
+    }
+
+    println!("\n-- TEATRI --");
+    for event in shows {
+        println!("- {event}")
     }
 
     Ok(())
@@ -119,4 +130,72 @@ async fn fetch_movies(client: &Client) -> Result<Vec<Event>> {
     ordered_movies.sort();
 
     return Ok(ordered_movies);
+}
+
+async fn fetch_theaters(client: &Client) -> Result<Vec<Event>> {
+    let mut events = Vec::new();
+    events.extend(fetch_rossetti(client).await?);
+
+    Ok(events)
+}
+
+async fn fetch_rossetti(client: &Client) -> Result<Vec<Event>> {
+    let mut events: HashSet<Event> = HashSet::new();
+    let today = chrono::Local::now().date_naive();
+    let in_a_week = today.checked_add_days(Days::new(7)).unwrap();
+    let current_week = DateRange::new(today, in_a_week);
+
+    let url = "https://www.ilrossetti.it/it/stagione/cartellone";
+    let html_body = client.get(url).send().await?.text().await?;
+    let document = Html::parse_document(&html_body);
+
+    let shows_sel = Selector::parse("div.single-show:not(.single-show--disabled)").unwrap();
+    let title_sel = Selector::parse("div.single-show__title > a").unwrap();
+    let date_sel = Selector::parse("div.single-show__date").unwrap();
+    for show in document.select(&shows_sel) {
+        let title_el = show.select(&title_sel).next();
+        if let None = title_el {
+            continue;
+        }
+        let title = title_el
+            .unwrap()
+            .text()
+            .next()
+            .expect("Each event card should have text")
+            .from_case(Case::Upper)
+            .to_case(Case::Title);
+
+        let date_el = show.select(&date_sel).next();
+        if let None = date_el {
+            continue;
+        }
+        let date_str = date_el
+            .unwrap()
+            .text()
+            .skip(1) // First text elem is an empty string (due to the icon probably)
+            .next()
+            .expect("Second text element should always be the date")
+            .trim()
+            .to_string();
+        let date_range =
+            parse_rossetti_date(&date_str).expect("Date should be in a standardized format");
+
+        // Skip events not in the current week
+        if !date_range.overlaps(&current_week) {
+            continue;
+        }
+
+        let event = Event {
+            title,
+            date: Some(date_range),
+            locations: Locations::from_loc("Rossetti".to_string()),
+        };
+        events.insert(event);
+    }
+
+    // Order alphabetically
+    let mut ordered_events: Vec<Event> = events.into_iter().collect();
+    ordered_events.sort();
+
+    Ok(ordered_events)
 }
