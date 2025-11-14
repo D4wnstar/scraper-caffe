@@ -1,10 +1,13 @@
 mod events;
 
+use std::{collections::HashSet, time::Duration};
+
 use anyhow::Result;
+use convert_case::{Case, Casing};
 use reqwest::{self, Client};
 use scraper::{Html, Selector};
 
-use crate::events::Event;
+use crate::events::{Event, Locations};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -12,8 +15,9 @@ async fn main() -> Result<()> {
 
     let movies = fetch_movies(&client).await?;
 
-    // Print results
-    println!("\n--- Compiled List of Events ---");
+    println!("--- QUESTA SETTIMANA A TRIESTE ---");
+    println!("(Questa lista è generata automaticamente e potrebbe contenere errori o duplicati)");
+    println!("\n-- Film --");
     for event in movies {
         println!("{}", event);
     }
@@ -22,50 +26,97 @@ async fn main() -> Result<()> {
 }
 
 async fn fetch_movies(client: &Client) -> Result<Vec<Event>> {
-    let mut movies: Vec<Event> = Vec::new();
+    let mut movies: HashSet<Event> = HashSet::new();
 
-    let mymovies_url = "https://www.mymovies.it/cinema/trieste/";
-    let html_body = client.get(mymovies_url).send().await?.text().await?;
-    let document = Html::parse_document(&html_body);
+    // Fetch movies from TriesteCinema for each day of the week
+    for delta in 0..=6 {
+        let cinema_url = format!("https://www.triestecinema.it/index.php?pag=orari&delta={delta}");
+        let html_body = client.get(cinema_url).send().await?.text().await?;
+        let document = Html::parse_document(&html_body);
 
-    let movie_box_sel = Selector::parse("div.mm-white.mm-padding-8").unwrap();
-    let title_sel = Selector::parse("div.schedine-titolo > a[title]").unwrap();
-    let cinemas_sel = Selector::parse("div.mm-light-grey a[title] > div > div").unwrap();
-    for movie_box in document.select(&movie_box_sel) {
-        let maybe_title_el = movie_box.select(&title_sel).next();
-        if let None = maybe_title_el {
-            continue;
-        }
-        let title = maybe_title_el
-            .unwrap()
-            .attr("title")
-            .unwrap_or("NO TITLE")
-            .trim()
-            .to_string();
-
-        let cinemas_els = movie_box.select(&cinemas_sel);
-        let mut cinemas = Vec::new();
-        for cinema_el in cinemas_els {
-            // There should be only one text node in the cinema element
-            let cinema = cinema_el
+        let movie_list_sel = Selector::parse("div.media-body").unwrap();
+        let cinema_sel = Selector::parse("h3.media-heading").unwrap();
+        let title_sel = Selector::parse("a.oggi").unwrap();
+        for movie_list in document.select(&movie_list_sel) {
+            // All text here is in UPPERCASE
+            let cinema = movie_list
+                .select(&cinema_sel)
+                .next()
+                .expect("Each list should have one cinema heading")
                 .text()
                 .next()
-                .unwrap()
-                .replace("Trieste", "")
-                .replace("CINEMA", "");
-            cinemas.push(cinema.trim().to_string());
-        }
-        let location = cinemas
-            .into_iter()
-            .reduce(|acc, new| format!("{acc}, {new}"));
+                .expect("Each heading should have text")
+                .trim()
+                .from_case(Case::Upper)
+                .to_case(Case::Title);
 
-        let movie = Event {
-            title,
-            date: None,
-            location,
-        };
-        movies.push(movie);
+            let titles: Vec<&str> = movie_list
+                .select(&title_sel)
+                .map(|title| title.text().next().expect("Each title should have text"))
+                .collect();
+
+            for title in titles {
+                let title = title
+                    .replace("ultimi giorni", "")
+                    .trim()
+                    .from_case(Case::Upper)
+                    .to_case(Case::Title);
+                let movie = Event {
+                    title,
+                    date: None,
+                    locations: Locations::from_loc(cinema.to_string()),
+                };
+
+                if movies.contains(&movie) {
+                    let existing_movie = movies.get(&movie).unwrap();
+                    let merged = movie.merge_by_location(existing_movie.clone());
+                    movies.replace(merged);
+                } else {
+                    movies.insert(movie);
+                };
+            }
+        }
+
+        // Await to not send too many requests too fast
+        tokio::time::sleep(Duration::from_millis(50)).await;
     }
 
-    return Ok(movies);
+    // Also fetch The Space movies from MyMovies becauase the actual website needs JavaScript
+    // jank to load the movie list at runtime after the page loads, meaning it does not work
+    // outside of a persistent browser
+    // This only fetches movies for today
+    {
+        let the_space_url = "https://www.mymovies.it/cinema/trieste/5894/";
+        let html_body = client.get(the_space_url).send().await?.text().await?;
+        let document = Html::parse_document(&html_body);
+
+        let title_sel =
+            Selector::parse("div.mm-white.mm-padding-8 div.schedine-titolo > a[title]").unwrap();
+        for title_el in document.select(&title_sel) {
+            let title = title_el
+                .attr("title")
+                .unwrap()
+                .from_case(Case::Sentence)
+                .to_case(Case::Title);
+            let movie = Event {
+                title,
+                date: None,
+                locations: Locations::from_loc("The Space".to_string()),
+            };
+
+            if movies.contains(&movie) {
+                let existing_movie = movies.get(&movie).unwrap();
+                let merged = movie.merge_by_location(existing_movie.clone());
+                movies.replace(merged);
+            } else {
+                movies.insert(movie);
+            };
+        }
+    }
+
+    // Order alphabetically
+    let mut ordered_movies: Vec<Event> = movies.into_iter().collect();
+    ordered_movies.sort();
+
+    return Ok(ordered_movies);
 }
