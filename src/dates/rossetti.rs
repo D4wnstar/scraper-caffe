@@ -1,68 +1,10 @@
 use chrono::NaiveDate;
-use std::fmt;
 
-/// Represents a date range that can be used for filtering and comparisons
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DateRange {
-    pub start_date: NaiveDate,
-    pub end_date: NaiveDate,
-}
-
-impl fmt::Display for DateRange {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.start_date != self.end_date {
-            let start = self.start_date.format("%d %b %Y");
-            let end = self.end_date.format("%d %b %Y");
-            write!(f, "da {start} a {end}",)
-        } else {
-            let start = self.start_date.format("%d %b %Y");
-            write!(f, "il {start}")
-        }
-    }
-}
-
-impl DateRange {
-    /// Create a new DateRange
-    pub fn new(start_date: NaiveDate, end_date: NaiveDate) -> Self {
-        Self {
-            start_date,
-            end_date,
-        }
-    }
-
-    /// Check if this date range overlaps with another date range
-    pub fn overlaps(&self, other: &DateRange) -> bool {
-        self.start_date <= other.end_date && self.end_date >= other.start_date
-    }
-
-    /// Check if a specific date is within this date range
-    pub fn contains(&self, date: NaiveDate) -> bool {
-        date >= self.start_date && date <= self.end_date
-    }
-}
-
-/// Parse Italian month names to numbers
-fn italian_month_to_number(month_name: &str) -> Option<u32> {
-    match month_name {
-        "Gen" => Some(1),
-        "Feb" => Some(2),
-        "Mar" => Some(3),
-        "Apr" => Some(4),
-        "Mag" => Some(5),
-        "Giu" => Some(6),
-        "Lug" => Some(7),
-        "Ago" => Some(8),
-        "Set" => Some(9),
-        "Ott" => Some(10),
-        "Nov" => Some(11),
-        "Dic" => Some(12),
-        _ => None,
-    }
-}
+use crate::dates::{DateRange, italian_month_to_number};
 
 /// Parse a date string from Rossetti data and return a DateRange
 ///
-/// This function handles various date formats found in the Rossetti data:
+/// This function handles these formats:
 /// - Single dates: "22 Set 2025"
 /// - Date ranges with same month: "23 - 24 Set 2025"
 /// - Date ranges spanning months: "8 - 19 Ott 2025", "27/2 - 1/3 2026"
@@ -97,7 +39,7 @@ fn parse_single_date(date_str: &str) -> Option<DateRange> {
     let date = NaiveDate::parse_from_str(&date_str, "%d/%m/%Y").ok()?;
 
     // For single dates, create a date range that spans one day
-    Some(DateRange::new(date, date))
+    return Some(DateRange::new(date, date));
 }
 
 /// Parse a date range string
@@ -120,7 +62,7 @@ fn parse_date_range(date_str: &str) -> Option<DateRange> {
         return parse_full_date_range(date_str);
     }
 
-    None
+    return None;
 }
 
 /// Parse date range with same month (e.g., "23 - 24 Set 2025")
@@ -139,7 +81,7 @@ fn parse_same_month_range(date_str: &str) -> Option<DateRange> {
     let end_str = format!("{}/{}/{}", parts[2], month, parts[4]); // e.g. 24/9/2025
     let end_date = NaiveDate::parse_from_str(&end_str, "%d/%m/%Y").ok()?;
 
-    Some(DateRange::new(start_date, end_date))
+    return Some(DateRange::new(start_date, end_date));
 }
 
 /// Parse date range with slash format (e.g., "27/2 - 1/3 2026")
@@ -157,7 +99,7 @@ fn parse_slash_date_range(date_str: &str) -> Option<DateRange> {
     let end_str = format!("{}/{}", parts[2], parts[3]); // e.g. 1/3/2026
     let end_date = NaiveDate::parse_from_str(&end_str, "%d/%m/%Y").ok()?;
 
-    Some(DateRange::new(start_date, end_date))
+    return Some(DateRange::new(start_date, end_date));
 }
 
 /// Parse date range with full date format (e.g., "30/12/2025 - 1/1/2026")
@@ -173,7 +115,7 @@ fn parse_full_date_range(date_str: &str) -> Option<DateRange> {
     let start_date = NaiveDate::parse_from_str(parts[0], "%d/%m/%Y").ok()?;
     let end_date = NaiveDate::parse_from_str(parts[1], "%d/%m/%Y").ok()?;
 
-    Some(DateRange::new(start_date, end_date))
+    return Some(DateRange::new(start_date, end_date));
 }
 
 #[cfg(test)]

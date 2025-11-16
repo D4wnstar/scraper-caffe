@@ -10,16 +10,19 @@ use reqwest::{self, Client};
 use scraper::{Html, Selector};
 
 use crate::{
-    dates::{DateRange, parse_rossetti_date},
+    dates::{DateRange, rossetti::parse_rossetti_date, verdi::parse_verdi_date},
     events::{Event, Locations},
 };
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let client = Client::new();
+    let today = chrono::Local::now().date_naive();
+    let in_a_week = today.checked_add_days(Days::new(7)).unwrap();
+    let current_week = DateRange::new(today, in_a_week);
 
     let movies = fetch_movies(&client).await?;
-    let shows = fetch_theaters(&client).await?;
+    let shows = fetch_theaters(&client, &current_week).await?;
 
     println!("--- QUESTA SETTIMANA A TRIESTE ---");
     println!("(Questa lista è generata automaticamente e potrebbe contenere errori o duplicati)");
@@ -132,18 +135,16 @@ async fn fetch_movies(client: &Client) -> Result<Vec<Event>> {
     return Ok(ordered_movies);
 }
 
-async fn fetch_theaters(client: &Client) -> Result<Vec<Event>> {
+async fn fetch_theaters(client: &Client, current_week: &DateRange) -> Result<Vec<Event>> {
     let mut events = Vec::new();
-    events.extend(fetch_rossetti(client).await?);
+    events.extend(fetch_rossetti(client, current_week).await?);
+    events.extend(fetch_teatroverdi(client, current_week).await?);
 
     Ok(events)
 }
 
-async fn fetch_rossetti(client: &Client) -> Result<Vec<Event>> {
+async fn fetch_rossetti(client: &Client, current_week: &DateRange) -> Result<Vec<Event>> {
     let mut events: HashSet<Event> = HashSet::new();
-    let today = chrono::Local::now().date_naive();
-    let in_a_week = today.checked_add_days(Days::new(7)).unwrap();
-    let current_week = DateRange::new(today, in_a_week);
 
     let url = "https://www.ilrossetti.it/it/stagione/cartellone";
     let html_body = client.get(url).send().await?.text().await?;
@@ -198,4 +199,49 @@ async fn fetch_rossetti(client: &Client) -> Result<Vec<Event>> {
     ordered_events.sort();
 
     Ok(ordered_events)
+}
+
+async fn fetch_teatroverdi(client: &Client, current_week: &DateRange) -> Result<Vec<Event>> {
+    let mut events: HashSet<Event> = HashSet::new();
+
+    let url = "https://www.teatroverdi-trieste.com/it/calendario-spettacoli/";
+    let html_body = client.get(url).send().await?.text().await?;
+    let document = Html::parse_document(&html_body);
+
+    let shows_sel = Selector::parse("ul.spettacolo-list div.list-text").unwrap();
+    let title_sel = Selector::parse("h2.spettacolo-list-title > a").unwrap();
+    let date_sel = Selector::parse("span.spettacolo-list-date > strong").unwrap();
+    for show in document.select(&shows_sel) {
+        let title_el = show.select(&title_sel).next();
+        if let None = title_el {
+            continue;
+        }
+        let title = title_el.unwrap().text().next().unwrap().to_string();
+
+        let date_el = show.select(&date_sel).next();
+        if let None = date_el {
+            continue;
+        }
+        let date_str = date_el.unwrap().text().next().unwrap();
+        let date_range =
+            parse_verdi_date(date_str).expect("Date should be in a standardized format");
+
+        // Skip events not in the current week
+        if !date_range.overlaps(&current_week) {
+            continue;
+        }
+
+        let event = Event {
+            title,
+            date: Some(date_range),
+            locations: Locations::from_loc("Verdi".to_string()),
+        };
+        events.insert(event);
+    }
+
+    // Order alphabetically
+    let mut ordered_events: Vec<Event> = events.into_iter().collect();
+    ordered_events.sort();
+
+    return Ok(ordered_events);
 }
