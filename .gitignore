@@ -1,2 +1,5 @@
 /target
 *.txt
+*.md
+*.html
+*.pdf

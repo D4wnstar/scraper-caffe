@@ -6,6 +6,8 @@ use std::{collections::HashSet, time::Duration};
 use anyhow::Result;
 use chrono::Days;
 use convert_case::{Case, Casing};
+use fancy_regex::Regex;
+use headless_chrome::LaunchOptions;
 use reqwest::{self, Client};
 use scraper::{Html, Selector};
 
@@ -24,26 +26,55 @@ async fn main() -> Result<()> {
     let in_a_week = today.checked_add_days(Days::new(7)).unwrap();
     let current_week = DateRange::new(today, in_a_week);
 
+    println!("Fetching events...");
     let movies = fetch_movies(&client).await?;
     let shows = fetch_theaters(&client, &current_week).await?;
 
-    println!("--- QUESTA SETTIMANA A TRIESTE ---");
-    println!("(Questa lista è generata automaticamente e potrebbe contenere errori o duplicati)");
-    println!("\n-- FILM --");
+    println!("Writing markdown...");
+    let mut output = String::new();
+    output += "# QUESTA SETTIMANA A TRIESTE\n";
+    output += "(Questa lista è generata automaticamente e potrebbe contenere errori o duplicati)\n";
+    output += "\n---\n\n";
+    output += "\n### FILM\n";
     for event in movies {
-        println!("- {event}");
+        output += &format!("- {event}\n");
     }
 
-    println!("\n-- TEATRI --");
+    output += "\n### TEATRI\n";
     for event in shows {
-        println!("- {event}")
+        output += &format!("- {event}\n");
     }
+    std::fs::write("./qsat.md", &output).unwrap();
 
+    println!("Converting to HTML...");
+    let mut html = comrak::markdown_to_html(&output, &comrak::Options::default());
+    html = html.replace("#", ""); // For some reason, the # character hard stops the print-to-PDF process at that location
+    std::fs::write("./qsat.html", &html).unwrap();
+
+    println!("Printing to PDF...");
+    // This will download Chrome binaries from the web
+    let browser =
+        headless_chrome::Browser::new(LaunchOptions::default_builder().path(None).build().unwrap())
+            .unwrap();
+    let tab = browser.new_tab().unwrap();
+    let tab = tab
+        .navigate_to(&format!("data:text/html;charset=utf-8,{}", html))
+        .unwrap()
+        .wait_until_navigated()
+        .unwrap();
+    let pdf_bytes = tab.print_to_pdf(None).unwrap();
+    std::fs::write("./qsat.pdf", pdf_bytes).unwrap();
+
+    println!("Done!");
     Ok(())
 }
 
 async fn fetch_movies(client: &Client) -> Result<Vec<Event>> {
     let mut movies: HashSet<Event> = HashSet::new();
+
+    let subtitle_regex = Regex::new(r"(?i)In [\w\d ]+ Con S\.+t\.+ Italiani").unwrap();
+    let leone_regex = Regex::new(r"(?i)Leone d'oro.*").unwrap();
+    let hyphen_regex = Regex::new(r" +\- +").unwrap();
 
     // Fetch movies from TriesteCinema for each day of the week
     for delta in 0..=6 {
@@ -73,11 +104,21 @@ async fn fetch_movies(client: &Client) -> Result<Vec<Event>> {
                 .collect();
 
             for title in titles {
-                let title = title
+                let mut title = title
                     .replace("ultimi giorni", "")
+                    .replace("4K", "")
                     .trim()
                     .from_case(Case::Upper)
-                    .to_case(Case::Title);
+                    .to_case(Case::Title)
+                    .replace("In 3d", "[3D]");
+
+                title = subtitle_regex
+                    .replace_all(&title, "[Originale Sottotitolato]")
+                    .to_string();
+                title = leone_regex.replace_all(&title, "").to_string();
+                title = hyphen_regex.replace_all(&title, ": ").to_string();
+                title = title.trim().to_string();
+
                 let movie = Event {
                     title,
                     date: None,
@@ -113,6 +154,7 @@ async fn fetch_movies(client: &Client) -> Result<Vec<Event>> {
             let title = title_el
                 .attr("title")
                 .unwrap()
+                .replace(" - ", ": ")
                 .from_case(Case::Sentence)
                 .to_case(Case::Title);
             let movie = Event {
@@ -144,6 +186,7 @@ async fn fetch_theaters(client: &Client, current_week: &DateRange) -> Result<Vec
     events.extend(fetch_miela(client, current_week).await?);
     events.extend(fetch_rossetti(client, current_week).await?);
     events.extend(fetch_teatroverdi(client, current_week).await?);
+    events.sort();
 
     Ok(events)
 }
@@ -203,11 +246,7 @@ async fn fetch_hangarteatri(client: &Client, current_week: &DateRange) -> Result
         events.insert(event);
     }
 
-    // Order alphabetically
-    let mut ordered_events: Vec<Event> = events.into_iter().collect();
-    ordered_events.sort();
-
-    Ok(ordered_events)
+    Ok(events.into_iter().collect())
 }
 
 async fn fetch_miela(client: &Client, current_week: &DateRange) -> Result<Vec<Event>> {
@@ -254,11 +293,7 @@ async fn fetch_miela(client: &Client, current_week: &DateRange) -> Result<Vec<Ev
         events.insert(event);
     }
 
-    // Order alphabetically
-    let mut ordered_events: Vec<Event> = events.into_iter().collect();
-    ordered_events.sort();
-
-    Ok(ordered_events)
+    Ok(events.into_iter().collect())
 }
 
 async fn fetch_rossetti(client: &Client, current_week: &DateRange) -> Result<Vec<Event>> {
@@ -312,11 +347,7 @@ async fn fetch_rossetti(client: &Client, current_week: &DateRange) -> Result<Vec
         events.insert(event);
     }
 
-    // Order alphabetically
-    let mut ordered_events: Vec<Event> = events.into_iter().collect();
-    ordered_events.sort();
-
-    Ok(ordered_events)
+    Ok(events.into_iter().collect())
 }
 
 async fn fetch_teatroverdi(client: &Client, current_week: &DateRange) -> Result<Vec<Event>> {
@@ -357,9 +388,5 @@ async fn fetch_teatroverdi(client: &Client, current_week: &DateRange) -> Result<
         events.insert(event);
     }
 
-    // Order alphabetically
-    let mut ordered_events: Vec<Event> = events.into_iter().collect();
-    ordered_events.sort();
-
-    return Ok(ordered_events);
+    return Ok(events.into_iter().collect());
 }
