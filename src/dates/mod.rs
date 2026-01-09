@@ -1,3 +1,5 @@
+pub mod hangarteatri;
+pub mod miela;
 pub mod rossetti;
 pub mod verdi;
 
@@ -38,6 +40,7 @@ impl DateRange {
         self.start_date <= other.end_date && self.end_date >= other.start_date
     }
 
+    #[allow(unused)]
     /// Check if a specific date is within this date range
     pub fn contains(&self, date: NaiveDate) -> bool {
         date >= self.start_date && date <= self.end_date

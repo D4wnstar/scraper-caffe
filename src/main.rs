@@ -10,13 +10,16 @@ use reqwest::{self, Client};
 use scraper::{Html, Selector};
 
 use crate::{
-    dates::{DateRange, rossetti::parse_rossetti_date, verdi::parse_verdi_date},
+    dates::{
+        DateRange, hangarteatri::parse_hangarteatri_date, miela::parse_miela_date,
+        rossetti::parse_rossetti_date, verdi::parse_verdi_date,
+    },
     events::{Event, Locations},
 };
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let client = Client::new();
+    let client = Client::builder().user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36").build().unwrap();
     let today = chrono::Local::now().date_naive();
     let in_a_week = today.checked_add_days(Days::new(7)).unwrap();
     let current_week = DateRange::new(today, in_a_week);
@@ -137,10 +140,125 @@ async fn fetch_movies(client: &Client) -> Result<Vec<Event>> {
 
 async fn fetch_theaters(client: &Client, current_week: &DateRange) -> Result<Vec<Event>> {
     let mut events = Vec::new();
+    events.extend(fetch_hangarteatri(client, current_week).await?);
+    events.extend(fetch_miela(client, current_week).await?);
     events.extend(fetch_rossetti(client, current_week).await?);
     events.extend(fetch_teatroverdi(client, current_week).await?);
 
     Ok(events)
+}
+
+async fn fetch_hangarteatri(client: &Client, current_week: &DateRange) -> Result<Vec<Event>> {
+    let mut events: HashSet<Event> = HashSet::new();
+
+    let url = "https://www.hangarteatri.com/eventi/";
+    let html_body = client.get(url).send().await?.text().await?;
+    let document = Html::parse_document(&html_body);
+
+    let shows_sel =
+        Selector::parse("li.tribe-common-g-row.tribe-events-calendar-list__event-row").unwrap();
+    let title_sel = Selector::parse("h4.tribe-events-calendar-list__event-title > a").unwrap();
+    let date_sel =
+        Selector::parse("time.tribe-events-calendar-list__event-datetime > span").unwrap();
+
+    for show in document.select(&shows_sel) {
+        let title_el = show.select(&title_sel).next();
+        if let None = title_el {
+            continue;
+        }
+        let title = title_el
+            .unwrap()
+            .text()
+            .next()
+            .expect("Each event card should have text")
+            .trim()
+            .from_case(Case::Title)
+            .to_case(Case::Title);
+
+        let date_el = show.select(&date_sel).next();
+        if let None = date_el {
+            continue;
+        }
+        let date_str = date_el
+            .unwrap()
+            .text()
+            .next()
+            .expect("Each event date should have text")
+            .to_string();
+
+        // Parse the date from the datetime attribute
+        let date_range =
+            parse_hangarteatri_date(&date_str).expect("Date should be in a standardized format");
+
+        // Skip events not in the current week
+        if !date_range.overlaps(&current_week) {
+            continue;
+        }
+
+        let event = Event {
+            title,
+            date: Some(date_range),
+            locations: Locations::from_loc("Hangar Teatri".to_string()),
+        };
+        events.insert(event);
+    }
+
+    // Order alphabetically
+    let mut ordered_events: Vec<Event> = events.into_iter().collect();
+    ordered_events.sort();
+
+    Ok(ordered_events)
+}
+
+async fn fetch_miela(client: &Client, current_week: &DateRange) -> Result<Vec<Event>> {
+    let mut events: HashSet<Event> = HashSet::new();
+
+    let url = "https://www.miela.it/calendario/";
+    let html_body = client.get(url).send().await?.text().await?;
+    let document = Html::parse_document(&html_body);
+
+    let shows_sel = Selector::parse("div.calendar-day").unwrap();
+    let title_sel = Selector::parse("a.calendar-show > p").unwrap();
+
+    for show in document.select(&shows_sel) {
+        let title_el = show.select(&title_sel).next();
+        if let None = title_el {
+            // Since Miela uses a full calendar, many calendar boxes are empty
+            continue;
+        }
+        let title = title_el
+            .unwrap()
+            .text()
+            .next()
+            .expect("Each event card should have text")
+            .trim()
+            .from_case(Case::Upper)
+            .to_case(Case::Title);
+
+        let date_str = show
+            .attr("data-calendar-day")
+            .expect("Each calendar day should have a date");
+        let date_range =
+            parse_miela_date(&date_str).expect("Date should be in a standardized format");
+
+        // Skip events not in the current week
+        if !date_range.overlaps(&current_week) {
+            continue;
+        }
+
+        let event = Event {
+            title,
+            date: Some(date_range),
+            locations: Locations::from_loc("Miela".to_string()),
+        };
+        events.insert(event);
+    }
+
+    // Order alphabetically
+    let mut ordered_events: Vec<Event> = events.into_iter().collect();
+    ordered_events.sort();
+
+    Ok(ordered_events)
 }
 
 async fn fetch_rossetti(client: &Client, current_week: &DateRange) -> Result<Vec<Event>> {
