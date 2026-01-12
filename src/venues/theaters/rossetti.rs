@@ -1,6 +1,69 @@
-use chrono::NaiveDate;
+use std::collections::HashSet;
 
-use crate::dates::{DateRange, italian_month_to_number};
+use anyhow::Result;
+use chrono::NaiveDate;
+use convert_case::{Case, Casing};
+use reqwest::Client;
+use scraper::{Html, Selector};
+
+use crate::{
+    dates::{DateRange, italian_month_to_number},
+    events::{Event, Locations},
+};
+
+pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Event>> {
+    let mut events: HashSet<Event> = HashSet::new();
+
+    let url = "https://www.ilrossetti.it/it/stagione/cartellone";
+    let html_body = client.get(url).send().await?.text().await?;
+    let document = Html::parse_document(&html_body);
+
+    let shows_sel = Selector::parse("div.single-show:not(.single-show--disabled)").unwrap();
+    let title_sel = Selector::parse("div.single-show__title > a").unwrap();
+    let date_sel = Selector::parse("div.single-show__date").unwrap();
+    for show in document.select(&shows_sel) {
+        let title_el = show.select(&title_sel).next();
+        if let None = title_el {
+            continue;
+        }
+        let title = title_el
+            .unwrap()
+            .text()
+            .next()
+            .expect("Each event card should have text")
+            .from_case(Case::Upper)
+            .to_case(Case::Title);
+
+        let date_el = show.select(&date_sel).next();
+        if let None = date_el {
+            continue;
+        }
+        let date_str = date_el
+            .unwrap()
+            .text()
+            .skip(1) // First text elem is an empty string (due to the icon probably)
+            .next()
+            .expect("Second text element should always be the date")
+            .trim()
+            .to_string();
+        let date_range = parse_date(&date_str).expect("Date should be in a standardized format");
+
+        // Skip events not in the current week
+        if !date_range.overlaps(&current_week) {
+            continue;
+        }
+
+        let event = Event {
+            title,
+            date: Some(date_range),
+            locations: Locations::from_loc("Rossetti".to_string()),
+            category: "Teatri".to_string(),
+        };
+        events.insert(event);
+    }
+
+    Ok(events.into_iter().collect())
+}
 
 /// Parse a date string from Rossetti data and return a DateRange
 ///
@@ -9,7 +72,7 @@ use crate::dates::{DateRange, italian_month_to_number};
 /// - Date ranges with same month: "23 - 24 Set 2025"
 /// - Date ranges spanning months: "8 - 19 Ott 2025", "27/2 - 1/3 2026"
 /// - Date ranges with different year formats: "30/12/2025 - 1/1/2026"
-pub fn parse_rossetti_date(date_str: &str) -> Option<DateRange> {
+fn parse_date(date_str: &str) -> Option<DateRange> {
     let trimmed = date_str.trim();
     if trimmed.is_empty() {
         return None;
@@ -126,7 +189,7 @@ mod tests {
 
     #[test]
     fn test_single_date() {
-        let range = parse_rossetti_date("22 Set 2025").unwrap();
+        let range = parse_date("22 Set 2025").unwrap();
         assert_eq!(range.start_date.day(), 22);
         assert_eq!(range.end_date.day(), 22); // Single date = same start and end
         assert_eq!(range.start_date.month(), 9);
@@ -135,7 +198,7 @@ mod tests {
 
     #[test]
     fn test_same_month_range() {
-        let result = parse_rossetti_date("23 - 24 Set 2025").unwrap();
+        let result = parse_date("23 - 24 Set 2025").unwrap();
         assert_eq!(result.start_date.day(), 23);
         assert_eq!(result.start_date.month(), 9);
         assert_eq!(result.start_date.year(), 2025);
@@ -146,7 +209,7 @@ mod tests {
 
     #[test]
     fn test_slash_date_range() {
-        let result = parse_rossetti_date("27/2 - 1/3 2026").unwrap();
+        let result = parse_date("27/2 - 1/3 2026").unwrap();
         assert_eq!(result.start_date.day(), 27);
         assert_eq!(result.start_date.month(), 2);
         assert_eq!(result.start_date.year(), 2026);
@@ -157,7 +220,7 @@ mod tests {
 
     #[test]
     fn test_full_date_range() {
-        let result = parse_rossetti_date("30/12/2025 - 1/1/2026").unwrap();
+        let result = parse_date("30/12/2025 - 1/1/2026").unwrap();
         assert_eq!(result.start_date.day(), 30);
         assert_eq!(result.start_date.month(), 12);
         assert_eq!(result.start_date.year(), 2025);
@@ -168,7 +231,7 @@ mod tests {
 
     #[test]
     fn test_date_range_contains() {
-        let range = parse_rossetti_date("23 - 24 Set 2025").unwrap();
+        let range = parse_date("23 - 24 Set 2025").unwrap();
         let test_date = NaiveDate::from_ymd_opt(2025, 9, 23).unwrap();
         assert!(range.contains(test_date));
 
@@ -178,9 +241,9 @@ mod tests {
 
     #[test]
     fn test_date_range_overlaps() {
-        let range1 = parse_rossetti_date("23 - 24 Set 2025").unwrap();
-        let range2 = parse_rossetti_date("24 - 25 Set 2025").unwrap();
-        let range3 = parse_rossetti_date("26 - 27 Set 2025").unwrap();
+        let range1 = parse_date("23 - 24 Set 2025").unwrap();
+        let range2 = parse_date("24 - 25 Set 2025").unwrap();
+        let range3 = parse_date("26 - 27 Set 2025").unwrap();
 
         assert!(range1.overlaps(&range2)); // Overlapping
         assert!(!range1.overlaps(&range3)); // Not overlapping

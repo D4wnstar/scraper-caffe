@@ -8,8 +8,27 @@ use crate::{
     events::{Event, Locations},
 };
 
-/// Load manual events from a TOML file
-pub fn load_manual_events(file_path: &str) -> Result<Vec<Event>> {
+pub fn fetch(filename: &str, current_week: &DateRange) -> Result<Vec<Event>> {
+    let custom_events = load_custom_events(filename)?;
+
+    // Filter custom events for current week
+    let mut filtered: Vec<Event> = custom_events
+        .into_iter()
+        .filter(|e| {
+            e.date
+                .as_ref()
+                .map(|d| d.overlaps(&current_week))
+                .unwrap_or(false)
+        })
+        .collect();
+
+    filtered.sort();
+
+    return Ok(filtered);
+}
+
+/// Load custom events from a TOML file
+fn load_custom_events(file_path: &str) -> Result<Vec<Event>> {
     // Check if file exists, if not return empty vec
     if !Path::new(file_path).exists() {
         return Ok(Vec::new());

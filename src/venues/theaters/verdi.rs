@@ -1,13 +1,62 @@
-use chrono::NaiveDate;
+use std::collections::HashSet;
 
-use crate::dates::{DateRange, italian_month_to_number};
+use anyhow::Result;
+use chrono::NaiveDate;
+use reqwest::Client;
+use scraper::{Html, Selector};
+
+use crate::{
+    dates::{DateRange, italian_month_to_number},
+    events::{Event, Locations},
+};
+
+pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Event>> {
+    let mut events: HashSet<Event> = HashSet::new();
+
+    let url = "https://www.teatroverdi-trieste.com/it/calendario-spettacoli/";
+    let html_body = client.get(url).send().await?.text().await?;
+    let document = Html::parse_document(&html_body);
+
+    let shows_sel = Selector::parse("ul.spettacolo-list div.list-text").unwrap();
+    let title_sel = Selector::parse("h2.spettacolo-list-title > a").unwrap();
+    let date_sel = Selector::parse("span.spettacolo-list-date > strong").unwrap();
+    for show in document.select(&shows_sel) {
+        let title_el = show.select(&title_sel).next();
+        if let None = title_el {
+            continue;
+        }
+        let title = title_el.unwrap().text().next().unwrap().to_string();
+
+        let date_el = show.select(&date_sel).next();
+        if let None = date_el {
+            continue;
+        }
+        let date_str = date_el.unwrap().text().next().unwrap();
+        let date_range = parse_date(date_str).expect("Date should be in a standardized format");
+
+        // Skip events not in the current week
+        if !date_range.overlaps(&current_week) {
+            continue;
+        }
+
+        let event = Event {
+            title,
+            date: Some(date_range),
+            locations: Locations::from_loc("Verdi".to_string()),
+            category: "Teatri".to_string(),
+        };
+        events.insert(event);
+    }
+
+    return Ok(events.into_iter().collect());
+}
 
 /// Parse a date string from Verdi data and return a DateRange
 ///
 /// This function handles these formats:
 /// - Single dates: "Martedì 23 dicembre 2025 ore 19.30"
 /// - Multiple dates: "28, 30 novembre, 5, 7, 11, 13 dicembre 2025"
-pub fn parse_verdi_date(date_str: &str) -> Option<DateRange> {
+fn parse_date(date_str: &str) -> Option<DateRange> {
     let trimmed = date_str.trim();
     if trimmed.is_empty() {
         return None;
@@ -138,7 +187,7 @@ mod tests {
 
     #[test]
     fn test_single_date() {
-        let range = parse_verdi_date("Martedì 23 dicembre 2025 ore 19.30").unwrap();
+        let range = parse_date("Martedì 23 dicembre 2025 ore 19.30").unwrap();
         assert_eq!(range.start_date.day(), 23);
         assert_eq!(range.end_date.day(), 23); // Single date = same start and end
         assert_eq!(range.start_date.month(), 12);
@@ -147,7 +196,7 @@ mod tests {
 
     #[test]
     fn test_single_date_without_time() {
-        let range = parse_verdi_date("Mercoledì 31 dicembre 2025").unwrap();
+        let range = parse_date("Mercoledì 31 dicembre 2025").unwrap();
         assert_eq!(range.start_date.day(), 31);
         assert_eq!(range.end_date.day(), 31);
         assert_eq!(range.start_date.month(), 12);
@@ -156,7 +205,7 @@ mod tests {
 
     #[test]
     fn test_multiple_dates_same_month() {
-        let result = parse_verdi_date("9, 10, 11, 13 gennaio 2026").unwrap();
+        let result = parse_date("9, 10, 11, 13 gennaio 2026").unwrap();
         assert_eq!(result.start_date.day(), 9);
         assert_eq!(result.start_date.month(), 1);
         assert_eq!(result.start_date.year(), 2026);
@@ -167,7 +216,7 @@ mod tests {
 
     #[test]
     fn test_multiple_dates_diff_month() {
-        let result = parse_verdi_date("28, 30 novembre, 5, 7, 11, 13 dicembre 2025").unwrap();
+        let result = parse_date("28, 30 novembre, 5, 7, 11, 13 dicembre 2025").unwrap();
         assert_eq!(result.start_date.day(), 28);
         assert_eq!(result.start_date.month(), 11);
         assert_eq!(result.start_date.year(), 2025);
@@ -178,7 +227,7 @@ mod tests {
 
     #[test]
     fn test_date_range_contains() {
-        let range = parse_verdi_date("28, 30 novembre, 5, 7, 11, 13 dicembre 2025").unwrap();
+        let range = parse_date("28, 30 novembre, 5, 7, 11, 13 dicembre 2025").unwrap();
         let test_date = NaiveDate::from_ymd_opt(2025, 11, 28).unwrap();
         assert!(range.contains(test_date));
 
@@ -188,9 +237,9 @@ mod tests {
 
     #[test]
     fn test_date_range_overlaps() {
-        let range1 = parse_verdi_date("28, 30 novembre, 5, 7, 11, 13 dicembre 2025").unwrap();
-        let range2 = parse_verdi_date("9, 10, 11, 13 gennaio 2026").unwrap();
-        let range3 = parse_verdi_date("19, 20, 21, 26, 27, 28 giugno 2026").unwrap();
+        let range1 = parse_date("28, 30 novembre, 5, 7, 11, 13 dicembre 2025").unwrap();
+        let range2 = parse_date("9, 10, 11, 13 gennaio 2026").unwrap();
+        let range3 = parse_date("19, 20, 21, 26, 27, 28 giugno 2026").unwrap();
 
         assert!(!range1.overlaps(&range2)); // Not overlapping
         assert!(!range1.overlaps(&range3)); // Not overlapping

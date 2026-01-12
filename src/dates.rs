@@ -1,8 +1,3 @@
-pub mod hangarteatri;
-pub mod miela;
-pub mod rossetti;
-pub mod verdi;
-
 use chrono::NaiveDate;
 use std::fmt;
 
