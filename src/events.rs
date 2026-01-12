@@ -8,6 +8,7 @@ pub struct Event {
     pub title: String,
     pub date: Option<DateRange>,
     pub locations: Locations,
+    pub category: String,
 }
 
 impl fmt::Display for Event {
@@ -72,6 +73,12 @@ impl Locations {
     pub fn from_loc(loc: String) -> Self {
         Self {
             locs: HashSet::from([loc]),
+        }
+    }
+
+    pub fn from_locs(locs: Vec<String>) -> Self {
+        Self {
+            locs: HashSet::from_iter(locs),
         }
     }
 }

@@ -1,7 +1,8 @@
 mod dates;
 mod events;
+mod manual_events;
 
-use std::{collections::HashSet, time::Duration};
+use std::{collections::HashMap, collections::HashSet, time::Duration};
 
 use anyhow::Result;
 use chrono::Days;
@@ -34,6 +35,11 @@ async fn main() -> Result<()> {
     println!("Fetching events...");
     let movies = fetch_movies(&client).await?;
     let shows = fetch_theaters(&client, &current_week).await?;
+    let manual = fetch_manual_events("manual_events.toml", &current_week)?;
+
+    let events_by_category = group_by_category([movies, shows, manual].concat());
+    let mut categories: Vec<&str> = events_by_category.keys().map(|s| s.as_str()).collect();
+    categories.sort();
 
     println!("Writing markdown...");
     let mut output = String::new();
@@ -45,14 +51,13 @@ async fn main() -> Result<()> {
     );
     output += "(La lista è generata automaticamente e potrebbe contenere errori o duplicati.)\n";
     output += "\n---\n\n";
-    output += "\n### FILM\n";
-    for event in movies {
-        output += &format!("- {event}\n");
-    }
 
-    output += "\n### TEATRI\n";
-    for event in shows {
-        output += &format!("- {event}\n");
+    for category in categories {
+        let events = events_by_category.get(category).unwrap();
+        output += &format!("\n### {}\n", category.to_uppercase());
+        for event in events {
+            output += &format!("- {event}\n");
+        }
     }
 
     let _ = std::fs::create_dir("./qsat");
@@ -135,6 +140,7 @@ async fn fetch_movies(client: &Client) -> Result<Vec<Event>> {
                     title,
                     date: None,
                     locations: Locations::from_loc(cinema.to_string()),
+                    category: "Film".to_string(),
                 };
 
                 if movies.contains(&movie) {
@@ -173,6 +179,7 @@ async fn fetch_movies(client: &Client) -> Result<Vec<Event>> {
                 title,
                 date: None,
                 locations: Locations::from_loc("The Space".to_string()),
+                category: "Film".to_string(),
             };
 
             if movies.contains(&movie) {
@@ -254,6 +261,7 @@ async fn fetch_hangarteatri(client: &Client, current_week: &DateRange) -> Result
             title,
             date: Some(date_range),
             locations: Locations::from_loc("Hangar Teatri".to_string()),
+            category: "Teatri".to_string(),
         };
         events.insert(event);
     }
@@ -301,6 +309,7 @@ async fn fetch_miela(client: &Client, current_week: &DateRange) -> Result<Vec<Ev
             title,
             date: Some(date_range),
             locations: Locations::from_loc("Miela".to_string()),
+            category: "Teatri".to_string(),
         };
         events.insert(event);
     }
@@ -355,6 +364,7 @@ async fn fetch_rossetti(client: &Client, current_week: &DateRange) -> Result<Vec
             title,
             date: Some(date_range),
             locations: Locations::from_loc("Rossetti".to_string()),
+            category: "Teatri".to_string(),
         };
         events.insert(event);
     }
@@ -396,9 +406,42 @@ async fn fetch_teatroverdi(client: &Client, current_week: &DateRange) -> Result<
             title,
             date: Some(date_range),
             locations: Locations::from_loc("Verdi".to_string()),
+            category: "Teatri".to_string(),
         };
         events.insert(event);
     }
 
     return Ok(events.into_iter().collect());
+}
+
+fn fetch_manual_events(filename: &str, current_week: &DateRange) -> Result<Vec<Event>> {
+    let manual_events = manual_events::load_manual_events(filename)?;
+
+    // Filter manual events for current week
+    let mut filtered_manual_events: Vec<Event> = manual_events
+        .into_iter()
+        .filter(|e| {
+            e.date
+                .as_ref()
+                .map(|d| d.overlaps(&current_week))
+                .unwrap_or(false)
+        })
+        .collect();
+
+    filtered_manual_events.sort();
+
+    return Ok(filtered_manual_events);
+}
+
+fn group_by_category(events: Vec<Event>) -> HashMap<String, Vec<Event>> {
+    let mut events_by_category: HashMap<String, Vec<Event>> = HashMap::new();
+
+    for event in events {
+        events_by_category
+            .entry(event.category.clone())
+            .or_insert_with(Vec::new)
+            .push(event);
+    }
+
+    return events_by_category;
 }

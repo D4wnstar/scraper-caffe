@@ -1,0 +1,12 @@
+# File per eventi manuali
+# Inteso per eventi da posti che non hanno un sito web
+# Formato: YYYY-MM-DD per date singole, YYYY-MM-DD/YYYY-MM-DD per periodi
+# La categoria dovrebbe essere plurale (e.g., "Mercatini" anziché "Mercatino")
+
+# Esempio:
+#
+# [[events]]
+# title = "Mercatino di Natale"
+# date = "2025-12-21/2026-01-06"
+# locations = ["Cavana", "Ponterosso"]
+# category = "Mercatini"
