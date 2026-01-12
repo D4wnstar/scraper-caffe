@@ -25,6 +25,13 @@ async fn main() -> Result<()> {
     let today = chrono::Local::now().date_naive();
     let in_a_week = today.checked_add_days(Days::new(7)).unwrap();
     let current_week = DateRange::new(today, in_a_week);
+    let today_str = today.format("%d/%m");
+    let in_a_week_str = in_a_week.format("%d/%m");
+    let filename = format!(
+        "qsat_{}_{}",
+        today.format("%d-%m"),
+        in_a_week.format("%d-%m")
+    );
 
     println!("Fetching events...");
     let movies = fetch_movies(&client).await?;
@@ -33,7 +40,10 @@ async fn main() -> Result<()> {
     println!("Writing markdown...");
     let mut output = String::new();
     output += "# QUESTA SETTIMANA A TRIESTE\n";
-    output += "(Questa lista è generata automaticamente e potrebbe contenere errori o duplicati)\n";
+    output += &format!(
+        "Questa è una lista di buona parte dei film e spettacoli teatrali a Trieste dal {today_str} al {in_a_week_str}. Prendeteli come spunto per nuove uscite!\n\n"
+    );
+    output += "(La lista è generata automaticamente e potrebbe contenere errori o duplicati.)\n";
     output += "\n---\n\n";
     output += "\n### FILM\n";
     for event in movies {
@@ -44,12 +54,14 @@ async fn main() -> Result<()> {
     for event in shows {
         output += &format!("- {event}\n");
     }
-    std::fs::write("./qsat.md", &output).unwrap();
+
+    let _ = std::fs::create_dir("./qsat");
+    // std::fs::write(format!("./qsat/{filename}.md"), &output).unwrap();
 
     println!("Converting to HTML...");
     let mut html = comrak::markdown_to_html(&output, &comrak::Options::default());
     html = html.replace("#", ""); // For some reason, the # character hard stops the print-to-PDF process at that location
-    std::fs::write("./qsat.html", &html).unwrap();
+    // std::fs::write(format!("./qsat/{filename}.html"), &html).unwrap();
 
     println!("Printing to PDF...");
     // This will download Chrome binaries from the web
@@ -63,7 +75,7 @@ async fn main() -> Result<()> {
         .wait_until_navigated()
         .unwrap();
     let pdf_bytes = tab.print_to_pdf(None).unwrap();
-    std::fs::write("./qsat.pdf", pdf_bytes).unwrap();
+    std::fs::write(format!("./qsat/{filename}.pdf"), pdf_bytes).unwrap();
 
     println!("Done!");
     Ok(())
