@@ -25,10 +25,8 @@ async fn main() -> Result<()> {
     let today = chrono::Local::now().date_naive();
     let in_a_week = today.checked_add_days(Days::new(7)).unwrap();
     let current_week = DateRange::new(today, in_a_week);
-    let today_str = today.format("%d/%m");
-    let in_a_week_str = in_a_week.format("%d/%m");
     let filename = format!(
-        "qsat_{}_{}",
+        "SettimanaTrieste_{}_{}",
         today.format("%d-%m"),
         in_a_week.format("%d-%m")
     );
@@ -41,7 +39,9 @@ async fn main() -> Result<()> {
     let mut output = String::new();
     output += "# QUESTA SETTIMANA A TRIESTE\n";
     output += &format!(
-        "Questa è una lista di buona parte dei film e spettacoli teatrali a Trieste dal {today_str} al {in_a_week_str}. Prendeteli come spunto per nuove uscite!\n\n"
+        "Questa è una lista di buona parte dei film e spettacoli teatrali a Trieste dal {} al {}. Prendeteli come spunto per nuove uscite!\n\n",
+        today.format("%d/%m"),
+        in_a_week.format("%d/%m")
     );
     output += "(La lista è generata automaticamente e potrebbe contenere errori o duplicati.)\n";
     output += "\n---\n\n";
