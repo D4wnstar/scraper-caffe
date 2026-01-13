@@ -6,10 +6,7 @@ use convert_case::{Case, Casing};
 use reqwest::Client;
 use scraper::{Html, Selector};
 
-use crate::{
-    dates::DateRange,
-    events::{Event, Locations},
-};
+use crate::{dates::DateRange, events::Event};
 
 pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Event>> {
     let mut events: HashSet<Event> = HashSet::new();
@@ -46,7 +43,7 @@ pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Even
             continue;
         }
 
-        let event = Event::new(&title, Locations::from_loc("Miela".to_string()), "Teatri")
+        let event = Event::new(&title, HashSet::from_iter(["Miela".to_string()]), "Teatri")
             .date(Some(date_range));
         events.insert(event);
     }

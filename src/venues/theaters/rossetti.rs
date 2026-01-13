@@ -8,7 +8,7 @@ use scraper::{Html, Selector};
 
 use crate::{
     dates::{DateRange, italian_month_to_number},
-    events::{Event, Locations},
+    events::Event,
 };
 
 pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Event>> {
@@ -55,7 +55,7 @@ pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Even
 
         let event = Event::new(
             &title,
-            Locations::from_loc("Rossetti".to_string()),
+            HashSet::from_iter(["Rossetti".to_string()]),
             "Teatri",
         )
         .date(Some(date_range));

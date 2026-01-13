@@ -3,10 +3,7 @@ use chrono::NaiveDate;
 use std::{collections::HashSet, fs, path::Path};
 use toml::Value;
 
-use crate::{
-    dates::DateRange,
-    events::{Event, Locations},
-};
+use crate::{dates::DateRange, events::Event};
 
 pub fn fetch(filename: &str, current_week: &DateRange) -> Result<Vec<Event>> {
     let custom_events = load_custom_events(filename)?;
@@ -79,7 +76,7 @@ fn parse_event_table(table: &Value) -> Result<Option<Event>> {
         .and_then(|date_str| parse_date(date_str));
 
     if let Some(title) = title {
-        let event = Event::new(&title, Locations::from_locs(locations), &category).date(date);
+        let event = Event::new(&title, HashSet::from_iter(locations), &category).date(date);
         return Ok(Some(event));
     }
 

@@ -1,7 +1,5 @@
 use std::{collections::HashSet, fmt, hash::Hash};
 
-use fancy_regex::Regex;
-
 use crate::dates::DateRange;
 
 /// An event somewhere, at some time.
@@ -10,7 +8,7 @@ pub struct Event {
     pub id: String,
     pub title: String,
     pub date: Option<DateRange>,
-    pub locations: Locations,
+    pub locations: HashSet<String>,
     pub category: String,
     pub description: Option<String>,
     pub summary: Option<String>,
@@ -30,13 +28,21 @@ impl fmt::Display for Event {
             .as_ref()
             .map_or("".to_string(), |d| format!(", {d}"));
 
-        let location = if self.locations.is_empty() {
-            "".to_string()
-        } else {
-            format!(" ({})", self.locations)
-        };
+        let mut locs: Vec<String> = self.locations.iter().cloned().collect();
+        locs.sort();
+        let loc_text = locs
+            .iter()
+            .enumerate()
+            .fold(String::new(), |acc, (i, new)| {
+                if i == 0 {
+                    new.to_string()
+                } else {
+                    format!("{acc}, {new}")
+                }
+            });
+        let locations = format!(" ({})", loc_text);
 
-        write!(f, "{title}{tags}{date}{location}")
+        write!(f, "{title}{tags}{date}{locations}")
     }
 }
 
@@ -67,7 +73,7 @@ impl Hash for Event {
 }
 
 impl Event {
-    pub fn new(title: &str, locations: Locations, category: &str) -> Self {
+    pub fn new(title: &str, locations: HashSet<String>, category: &str) -> Self {
         Self {
             id: title.to_string(),
             title: title.to_string(),
@@ -97,62 +103,5 @@ impl Event {
 
     pub fn tags(self: Self, tags: HashSet<String>) -> Self {
         Self { tags, ..self }
-    }
-
-    /// Add all locations of the argument [Event] into the caller [Event] in place.
-    pub fn extend_locations(&mut self, other: &Self) {
-        self.locations.extend(other.locations.clone());
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Locations {
-    locs: HashSet<String>,
-}
-
-impl Locations {
-    pub fn from_loc(loc: String) -> Self {
-        Self {
-            locs: HashSet::from([loc]),
-        }
-    }
-
-    pub fn from_locs(locs: Vec<String>) -> Self {
-        Self {
-            locs: HashSet::from_iter(locs),
-        }
-    }
-}
-
-impl fmt::Display for Locations {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Print in a comma-separated list
-        let text = self
-            .locs
-            .iter()
-            .enumerate()
-            .fold(String::new(), |acc, (i, new)| {
-                if i == 0 {
-                    new.to_string()
-                } else {
-                    format!("{acc}, {new}")
-                }
-            });
-
-        write!(f, "{text}")
-    }
-}
-
-impl Locations {
-    pub fn extend(&mut self, locs: Locations) {
-        self.locs.extend(locs.dump());
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.locs.is_empty()
-    }
-
-    pub fn dump(self) -> HashSet<String> {
-        self.locs
     }
 }
