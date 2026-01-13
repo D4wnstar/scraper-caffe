@@ -1,5 +1,6 @@
 mod dates;
 mod events;
+mod summarize;
 mod venues;
 
 use std::collections::HashMap;
@@ -17,9 +18,8 @@ use crate::{
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let client = Client::builder().user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36").build().unwrap();
     let today = chrono::Local::now().date_naive();
-    let in_a_week = today.checked_add_days(Days::new(7)).unwrap();
+    let in_a_week = today.checked_add_days(Days::new(1)).unwrap();
     let current_week = DateRange::new(today, in_a_week);
     let filename = format!(
         "SettimanaTrieste_{}_{}",
@@ -28,11 +28,12 @@ async fn main() -> Result<()> {
     );
 
     println!("Fetching events...");
+    let client = Client::builder().user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36").build().unwrap();
     let movies = cinemas::fetch(&client).await?;
-    let shows = theaters::fetch(&client, &current_week).await?;
-    let custom = custom::fetch("custom_events.toml", &current_week)?;
+    // let shows = theaters::fetch(&client, &current_week).await?;
+    // let custom = custom::fetch("custom_events.toml", &current_week)?;
 
-    let events_by_category = group_by_category([movies, shows, custom].concat());
+    let events_by_category = group_by_category([movies].concat());
     let mut categories: Vec<&str> = events_by_category.keys().map(|s| s.as_str()).collect();
     categories.sort();
 

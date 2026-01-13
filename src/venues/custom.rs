@@ -1,6 +1,6 @@
 use anyhow::Result;
 use chrono::NaiveDate;
-use std::{fs, path::Path};
+use std::{collections::HashSet, fs, path::Path};
 use toml::Value;
 
 use crate::{
@@ -73,18 +73,13 @@ fn parse_event_table(table: &Value) -> Result<Option<Event>> {
         })
         .unwrap_or_default();
 
-    let date_range = table
+    let date = table
         .get("date")
         .and_then(Value::as_str)
         .and_then(|date_str| parse_date(date_str));
 
     if let Some(title) = title {
-        let event = Event {
-            title,
-            date: date_range,
-            locations: Locations::from_locs(locations),
-            category,
-        };
+        let event = Event::new(&title, Locations::from_locs(locations), &category).date(date);
         return Ok(Some(event));
     }
 

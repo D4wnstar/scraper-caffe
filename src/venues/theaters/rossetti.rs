@@ -53,12 +53,12 @@ pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Even
             continue;
         }
 
-        let event = Event {
-            title,
-            date: Some(date_range),
-            locations: Locations::from_loc("Rossetti".to_string()),
-            category: "Teatri".to_string(),
-        };
+        let event = Event::new(
+            &title,
+            Locations::from_loc("Rossetti".to_string()),
+            "Teatri",
+        )
+        .date(Some(date_range));
         events.insert(event);
     }
 

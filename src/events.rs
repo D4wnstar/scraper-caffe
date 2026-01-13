@@ -1,19 +1,30 @@
 use std::{collections::HashSet, fmt, hash::Hash};
 
+use fancy_regex::Regex;
+
 use crate::dates::DateRange;
 
 /// An event somewhere, at some time.
 #[derive(Debug, Clone)]
 pub struct Event {
+    pub id: String,
     pub title: String,
     pub date: Option<DateRange>,
     pub locations: Locations,
     pub category: String,
+    pub description: Option<String>,
+    pub summary: Option<String>,
+    pub tags: HashSet<String>,
 }
 
 impl fmt::Display for Event {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let title = format!("_{}_", self.title);
+        let tags = self
+            .tags
+            .iter()
+            .fold(String::new(), |acc, tag| format!("{acc} [{tag}]"));
+
         let date = self
             .date
             .as_ref()
@@ -25,13 +36,13 @@ impl fmt::Display for Event {
             format!(" ({})", self.locations)
         };
 
-        write!(f, "{title}{date}{location}")
+        write!(f, "{title}{tags}{date}{location}")
     }
 }
 
 impl PartialEq for Event {
     fn eq(&self, other: &Self) -> bool {
-        self.title == other.title
+        self.id == other.id
     }
 }
 
@@ -51,16 +62,46 @@ impl PartialOrd for Event {
 
 impl Hash for Event {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.title.hash(state);
+        self.id.hash(state);
     }
 }
 
 impl Event {
-    /// Add all locations of the argument Event into the caller Event.
-    /// Consumes the argument.
-    pub fn merge_by_location(mut self, other: Self) -> Self {
-        self.locations.extend(other.locations);
-        return self;
+    pub fn new(title: &str, locations: Locations, category: &str) -> Self {
+        Self {
+            id: title.to_string(),
+            title: title.to_string(),
+            date: None,
+            locations,
+            category: category.to_string(),
+            description: None,
+            summary: None,
+            tags: HashSet::new(),
+        }
+    }
+
+    pub fn id(self: Self, id: String) -> Self {
+        Self { id, ..self }
+    }
+
+    pub fn date(self: Self, date: Option<DateRange>) -> Self {
+        Self { date, ..self }
+    }
+
+    pub fn description(self: Self, description: Option<String>) -> Self {
+        Self {
+            description,
+            ..self
+        }
+    }
+
+    pub fn tags(self: Self, tags: HashSet<String>) -> Self {
+        Self { tags, ..self }
+    }
+
+    /// Add all locations of the argument [Event] into the caller [Event] in place.
+    pub fn extend_locations(&mut self, other: &Self) {
+        self.locations.extend(other.locations.clone());
     }
 }
 
