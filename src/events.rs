@@ -17,7 +17,7 @@ pub struct Event {
 
 impl fmt::Display for Event {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let title = format!("_{}_", self.title);
+        let title = format!("**{}**", self.title);
         let tags = self
             .tags
             .iter()

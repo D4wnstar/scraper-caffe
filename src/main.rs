@@ -49,10 +49,12 @@ async fn main() -> Result<()> {
     output += "\n---\n\n";
 
     for category in categories {
-        let events = events_by_category.get(category).unwrap();
-        output += &format!("\n### {}\n", category.to_uppercase());
-        for event in events {
+        output += &format!("\n## {}\n", category.to_uppercase());
+        for event in events_by_category.get(category).unwrap() {
             output += &format!("- {event}\n");
+            if let Some(desc) = &event.description {
+                output += &format!("  - {desc}\n");
+            }
         }
     }
 
