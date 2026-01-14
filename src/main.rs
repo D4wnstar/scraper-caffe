@@ -8,6 +8,7 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use chrono::Days;
+use clap::Parser;
 use headless_chrome::LaunchOptions;
 use reqwest::{self, Client};
 
@@ -17,10 +18,22 @@ use crate::{
     venues::{cinemas, custom, theaters},
 };
 
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
+struct Args {
+    #[arg(short, long, default_value_t = 7)]
+    days: u64,
+
+    #[arg(short, long)]
+    save_debug: bool,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
+    let args = Args::parse();
+
     let today = chrono::Local::now().date_naive();
-    let in_a_week = today.checked_add_days(Days::new(6)).unwrap();
+    let in_a_week = today.checked_add_days(Days::new(args.days - 1)).unwrap();
     let current_week = DateRange::new(today, in_a_week);
 
     let _ = std::fs::create_dir("./qsat");
@@ -29,10 +42,11 @@ async fn main() -> Result<()> {
         today.format("%d-%m"),
         in_a_week.format("%d-%m")
     );
+    let maybe_filename = args.save_debug.then_some(filename.as_str()).or(None);
 
     let events = fetch_events(&current_week).await;
-    let markdown = write_markdown(events, &current_week, None);
-    let html = write_html(&markdown, None);
+    let markdown = write_markdown(events, &current_week, maybe_filename);
+    let html = write_html(&markdown, maybe_filename);
     print_to_pdf(&html, &filename);
 
     println!("Done!");
