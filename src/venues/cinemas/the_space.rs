@@ -2,11 +2,13 @@ use std::collections::{HashMap, HashSet};
 
 use anyhow::Result;
 use convert_case::{Case, Casing};
+use indicatif::{ProgressBar, ProgressFinish, ProgressIterator, ProgressStyle};
 use reqwest::Client;
 use scraper::{Html, Selector};
 
 use crate::{
     events::Event,
+    utils::PROGRESS_BAR_TEMPLATE,
     venues::cinemas::{MovieGroup, clean_title},
 };
 
@@ -21,7 +23,14 @@ pub async fn fetch(client: &Client, movie_groups: &mut HashMap<String, MovieGrou
 
     let title_sel =
         Selector::parse("div.mm-white.mm-padding-8 div.schedine-titolo > a[title]").unwrap();
-    for title_el in document.select(&title_sel) {
+
+    let movie_count = document.select(&title_sel).count();
+    let progress = ProgressBar::new(movie_count as u64)
+        .with_style(ProgressStyle::with_template(PROGRESS_BAR_TEMPLATE).unwrap())
+        .with_message("Fetching The Space")
+        .with_finish(ProgressFinish::AndLeave);
+
+    for title_el in document.select(&title_sel).progress_with(progress) {
         let (title, base_title, id, tags) = clean_title(title_el.attr("title").unwrap());
 
         let movie = Event::new(

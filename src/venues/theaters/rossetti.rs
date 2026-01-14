@@ -3,12 +3,14 @@ use std::collections::HashSet;
 use anyhow::Result;
 use chrono::NaiveDate;
 use convert_case::{Case, Casing};
+use indicatif::{ProgressBar, ProgressFinish, ProgressIterator, ProgressStyle};
 use reqwest::Client;
 use scraper::{Html, Selector};
 
 use crate::{
     dates::{DateRange, italian_month_to_number},
     events::Event,
+    utils::PROGRESS_BAR_TEMPLATE,
 };
 
 pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Event>> {
@@ -21,7 +23,14 @@ pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Even
     let shows_sel = Selector::parse("div.single-show:not(.single-show--disabled)").unwrap();
     let title_sel = Selector::parse("div.single-show__title > a").unwrap();
     let date_sel = Selector::parse("div.single-show__date").unwrap();
-    for show in document.select(&shows_sel) {
+
+    let show_count = document.select(&shows_sel).count();
+    let progress = ProgressBar::new(show_count as u64)
+        .with_style(ProgressStyle::with_template(PROGRESS_BAR_TEMPLATE).unwrap())
+        .with_message("Fetching Rossetti")
+        .with_finish(ProgressFinish::AndLeave);
+
+    for show in document.select(&shows_sel).progress_with(progress) {
         let title_el = show.select(&title_sel).next();
         if let None = title_el {
             continue;

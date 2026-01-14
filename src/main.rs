@@ -1,6 +1,7 @@
 mod dates;
 mod events;
 mod summarize;
+mod utils;
 mod venues;
 
 use std::collections::HashMap;

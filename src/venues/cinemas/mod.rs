@@ -40,8 +40,12 @@ pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Even
         // Put base variants before special variants (e.g., 3D)
         let mut variants: Vec<Event> = group.movies.into_iter().collect();
         variants.sort_by(|a, b| a.tags.len().cmp(&b.tags.len()));
-        // The base variant inherits the group description
-        variants[0].description = group.description;
+        // The last variant inherits the group description
+        // This is because graphically this'll be printed last
+        // and we should end on a group on its description
+        if let Some(var) = variants.last_mut() {
+            var.description = group.description;
+        }
         movies_by_group.push(variants);
     }
 
@@ -57,6 +61,7 @@ pub(super) fn clean_title(title: &str) -> (String, String, String, HashSet<Strin
     let mut new_title = title
         .to_lowercase()
         .replace("ultimi giorni", "")
+        .replace(" / ultimo giorno", "")
         .replace("4k", "")
         .trim()
         .to_string();

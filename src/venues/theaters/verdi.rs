@@ -2,12 +2,14 @@ use std::collections::HashSet;
 
 use anyhow::Result;
 use chrono::NaiveDate;
+use indicatif::{ProgressBar, ProgressFinish, ProgressIterator, ProgressStyle};
 use reqwest::Client;
 use scraper::{Html, Selector};
 
 use crate::{
     dates::{DateRange, italian_month_to_number},
     events::Event,
+    utils::PROGRESS_BAR_TEMPLATE,
 };
 
 pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Event>> {
@@ -20,7 +22,14 @@ pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Even
     let shows_sel = Selector::parse("ul.spettacolo-list div.list-text").unwrap();
     let title_sel = Selector::parse("h2.spettacolo-list-title > a").unwrap();
     let date_sel = Selector::parse("span.spettacolo-list-date > strong").unwrap();
-    for show in document.select(&shows_sel) {
+
+    let show_count = document.select(&shows_sel).count();
+    let progress = ProgressBar::new(show_count as u64)
+        .with_style(ProgressStyle::with_template(PROGRESS_BAR_TEMPLATE).unwrap())
+        .with_message("Fetching Verdi")
+        .with_finish(ProgressFinish::AndLeave);
+
+    for show in document.select(&shows_sel).progress_with(progress) {
         let title_el = show.select(&title_sel).next();
         if let None = title_el {
             continue;

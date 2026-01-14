@@ -5,12 +5,14 @@ use std::{
 
 use anyhow::Result;
 use convert_case::{Case, Casing};
+use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Client;
 use scraper::{Html, Selector};
 
 use crate::{
     dates::DateRange,
     events::Event,
+    utils::PROGRESS_BAR_TEMPLATE,
     venues::cinemas::{MovieGroup, SPACE_NUKE, clean_title},
 };
 
@@ -19,6 +21,10 @@ pub async fn fetch(
     date_range: &DateRange,
     movie_groups: &mut HashMap<String, MovieGroup>,
 ) -> Result<()> {
+    let progress = ProgressBar::new(0)
+        .with_style(ProgressStyle::with_template(PROGRESS_BAR_TEMPLATE).unwrap())
+        .with_message("Fetching TriesteCinema");
+
     let movie_list_sel = Selector::parse("div.media-body").unwrap();
     let cinema_sel = Selector::parse("h3.media-heading").unwrap();
     let title_sel = Selector::parse("a.oggi").unwrap();
@@ -29,6 +35,11 @@ pub async fn fetch(
         let cinema_url = format!("https://www.triestecinema.it/index.php?pag=orari&delta={delta}");
         let html_body = client.get(cinema_url).send().await?.text().await?;
         let document = Html::parse_document(&html_body);
+
+        let movie_count = document
+            .select(&movie_list_sel)
+            .fold(0, |acc, list| acc + list.select(&title_sel).count());
+        progress.inc_length(movie_count as u64);
 
         for movie_list in document.select(&movie_list_sel) {
             // All text here is in UPPERCASE
@@ -82,11 +93,15 @@ pub async fn fetch(
                         movies: HashSet::from([movie]),
                     });
 
+                progress.inc(1);
+
                 // Await to not send too many requests too fast
                 tokio::time::sleep(Duration::from_millis(20)).await;
             }
         }
     }
+
+    progress.finish();
 
     return Ok(());
 }
