@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use anyhow::{Result, bail};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};

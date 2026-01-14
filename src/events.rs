@@ -1,9 +1,10 @@
+use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, fmt, hash::Hash};
 
 use crate::dates::DateRange;
 
 /// An event somewhere, at some time.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Event {
     pub id: String,
     pub title: String,
@@ -11,7 +12,7 @@ pub struct Event {
     pub locations: HashSet<String>,
     pub category: String,
     pub description: Option<String>,
-    pub summary: Option<String>,
+    // pub summary: Option<String>,
     pub tags: HashSet<String>,
 }
 
@@ -81,7 +82,7 @@ impl Event {
             locations,
             category: category.to_string(),
             description: None,
-            summary: None,
+            // summary: None,
             tags: HashSet::new(),
         }
     }
@@ -94,6 +95,7 @@ impl Event {
         Self { date, ..self }
     }
 
+    #[allow(unused)]
     pub fn description(self: Self, description: Option<String>) -> Self {
         Self {
             description,

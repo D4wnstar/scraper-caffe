@@ -6,14 +6,32 @@ pub mod verdi;
 use anyhow::Result;
 use reqwest::Client;
 
-use crate::{dates::DateRange, events::Event};
+use crate::{dates::DateRange, events::Event, venues::CacheManager};
 
-pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Event>> {
-    let mut events = Vec::new();
-    events.extend(hangarteatri::fetch(client, current_week).await?);
-    events.extend(miela::fetch(client, current_week).await?);
-    events.extend(rossetti::fetch(client, current_week).await?);
-    events.extend(verdi::fetch(client, current_week).await?);
+pub async fn fetch(
+    client: &Client,
+    time_period: &DateRange,
+    cache_manager: &mut CacheManager,
+) -> Result<Vec<Event>> {
+    cache_manager.set_category("theater");
+    let hangarteatri = cache_manager
+        .get_or_fetch("hangarteatri", async || {
+            hangarteatri::fetch(client, time_period).await
+        })
+        .await?;
+    let miela = cache_manager
+        .get_or_fetch("miela", async || miela::fetch(client, time_period).await)
+        .await?;
+    let rossetti = cache_manager
+        .get_or_fetch("rossetti", async || {
+            rossetti::fetch(client, time_period).await
+        })
+        .await?;
+    let verdi = cache_manager
+        .get_or_fetch("verdi", async || verdi::fetch(client, time_period).await)
+        .await?;
+
+    let mut events: Vec<Event> = [hangarteatri, miela, rossetti, verdi].concat();
     events.sort();
 
     Ok(events)

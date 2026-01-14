@@ -1,6 +1,7 @@
+/qsat
+/cache
 /target
 *.txt
 *.md
 *.html
 *.pdf
-/qsat

@@ -1,8 +1,9 @@
 use chrono::NaiveDate;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// Represents a date range that can be used for filtering and comparisons
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DateRange {
     pub start_date: NaiveDate,
     pub end_date: NaiveDate,

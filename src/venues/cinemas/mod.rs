@@ -7,8 +7,9 @@ use anyhow::Result;
 use fancy_regex::Regex;
 use lazy_static::lazy_static;
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 
-use crate::{dates::DateRange, events::Event};
+use crate::{dates::DateRange, events::Event, venues::CacheManager};
 
 lazy_static! {
     static ref ORIGINAL_LANG: Regex = Regex::new(r"(?i)In [\w\d ]+ Con S\.+t\.+ Italiani").unwrap();
@@ -22,21 +23,61 @@ lazy_static! {
 /// A set of movie [Event]s to handle multiple variants of the same movie. For instance,
 /// a movie could be screened normally, in original language, in 3D, etc. These are different
 /// events, but all the same movie.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub(super) struct MovieGroup {
+    title: String,
     description: Option<String>,
     movies: HashSet<Event>,
 }
 
-pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Event>> {
+impl MovieGroup {
+    fn add_movies(&mut self, movies: Vec<Event>) {
+        for movie in movies {
+            if let Some(mut existing) = self.movies.take(&movie) {
+                existing.locations.extend(movie.locations);
+                self.movies.insert(existing);
+            } else {
+                self.movies.insert(movie);
+            }
+        }
+    }
+}
+
+pub async fn fetch(
+    client: &Client,
+    time_period: &DateRange,
+    cache_manager: &mut CacheManager,
+) -> Result<Vec<Event>> {
+    cache_manager.set_category("cinema");
+    let triestecinema = cache_manager
+        .get_or_fetch("triestecinema", async || {
+            triestecinema::fetch(client, time_period).await
+        })
+        .await?;
+    let the_space = cache_manager
+        .get_or_fetch("the_space", async || the_space::fetch(client).await)
+        .await?;
+
+    // Combine identical movies in a single list
     let mut movie_groups: HashMap<String, MovieGroup> = HashMap::new();
 
-    triestecinema::fetch(client, current_week, &mut movie_groups).await?;
-    the_space::fetch(client, &mut movie_groups).await?;
+    for groups in [triestecinema, the_space] {
+        for group in groups {
+            movie_groups
+                .entry(group.title.clone())
+                .and_modify(|ext_group| {
+                    // Last existing description wins
+                    if group.description.is_some() {
+                        ext_group.description = group.description.clone();
+                    }
+                    ext_group.add_movies(group.movies.iter().cloned().collect());
+                })
+                .or_insert(group);
+        }
+    }
 
-    // Collapse groups into a flat list
     let mut movies_by_group: Vec<Vec<Event>> = Vec::new();
-    for (_, group) in movie_groups.into_iter() {
+    for group in movie_groups.into_values() {
         // Put base variants before special variants (e.g., 3D)
         let mut variants: Vec<Event> = group.movies.into_iter().collect();
         variants.sort_by(|a, b| a.tags.len().cmp(&b.tags.len()));

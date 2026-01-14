@@ -11,7 +11,7 @@ use serde_json::Value;
 
 use crate::{events::Event, utils::PROGRESS_BAR_TEMPLATE, venues::cinemas::MovieGroup};
 
-pub async fn fetch(client: &Client, movie_groups: &mut HashMap<String, MovieGroup>) -> Result<()> {
+pub async fn fetch(client: &Client) -> Result<Vec<MovieGroup>> {
     // The Space's website is a Next.js app and contains absolutely zero functional
     // HTML without JavaScript. It does contain a JSON object that contains a bunch of content,
     // but only a few movies Thankfully, the movies are taken from an server API route that
@@ -49,6 +49,8 @@ pub async fn fetch(client: &Client, movie_groups: &mut HashMap<String, MovieGrou
         .with_message("Fetching The Space")
         .with_finish(ProgressFinish::AndLeave);
 
+    let mut movie_groups: HashMap<String, MovieGroup> = HashMap::new();
+
     for listing in listings.iter().progress_with(progress) {
         let (title, base_title, _) = super::clean_title(listing["filmTitle"].as_str().unwrap());
         let description = listing["synopsisShort"].as_str().unwrap();
@@ -84,13 +86,14 @@ pub async fn fetch(client: &Client, movie_groups: &mut HashMap<String, MovieGrou
                     group.description = Some(description.to_string());
                 })
                 .or_insert_with(|| MovieGroup {
+                    title: base_title.clone(),
                     description: Some(description.to_string()),
                     movies: HashSet::from([movie]),
                 });
         }
     }
 
-    return Ok(());
+    return Ok(movie_groups.into_values().collect());
 }
 
 async fn call_api(client: &Client, url: &str) -> Response {
@@ -111,7 +114,7 @@ async fn call_api(client: &Client, url: &str) -> Response {
             .header("DNT", "1")
             .header("Sec-GPC", "1")
             .header("Connection", "keep-alive")
-            .header("Cookie", "cinemaId=1011; cinemaName=trieste; analyticsCinemaName=Trieste; cinemaCurrency=EUR; isSecondaryMarket=false; hasLayout=true")
+            .header("Cookie", "cinemaId=1011; cinemaName=trieste; analyticsCinemaName=Trieste; cinemaCurrency=EUR; isSecondaryMarket=false; hasLayout=true; OptanonConsent=isGpcEnabled=1&datestamp=Wed+Jan+14+2026+16%3A32%3A05+GMT%2B0100+(Ora+standard+dell%E2%80%99Europa+centrale)&version=6.30.0&isIABGlobal=false&hosts=&genVendors=&consentId=842f2ecc-b4fd-464a-ac38-bc9188b36abf&interactionCount=2&landingPath=NotLandingPage&groups=C0001%3A1%2CC0002%3A0%2CC0003%3A1%2CC0004%3A0%2CC0005%3A0&geolocation=%3B&AwaitingReconsent=false; OptanonAlertBoxClosed=2026-01-14T11:19:07.215Z; microservicesToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxNzRlM2YxMS02ZDRmLTQ5YTAtOGNkNC01ODRlZGVmZGMxMDYiLCJDb3VudHJ5IjoiSVQiLCJBdXRoIjoiMyIsIlNob3dpbmciOiIzIiwiQm9va2luZyI6IjMiLCJQYXltZW50IjoiMyIsIlBhcnRuZXIiOiIwIiwiTG95YWx0eSI6IjMiLCJDYW1wYWlnblRyYWNraW5nQ29kZSI6IiIsIkNsaWVudE5hbWUiOiIiLCJuYmYiOjE3NjgzODk1NDMsImV4cCI6MTc2ODQzMjc0MywiaXNzIjoiUHJvZCJ9.y8Nbo_XAQPqFykSA5HLUv__c_m9Dx7moaYZVrbEiOxM; microservicesRefreshToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxNzRlM2YxMS02ZDRmLTQ5YTAtOGNkNC01ODRlZGVmZGMxMDYiLCJDb3VudHJ5IjoiSVQiLCJJc0Fub255bW91cyI6IlRydWUiLCJuYmYiOjE3NjgzODk1NDMsImV4cCI6MTc2ODk5NDM0MywiaXNzIjoiQXV0aFByb2QifQ.BiJPBDrrEyofEsf4P0RVP9zxp9s8MEtwdJwTFI6xuHg; accessTokenExpirationTime=2026-01-14T23%3A19%3A03Z; refreshTokenExpirationTime=2026-01-21T11%3A19%3A03Z; __cflb=02DiuE2nAGMFu3TxDimEkxSkFKsPnnKB65aKFsMoLTtNQ; vuecinemas-it#lang=it-IT; ASP.NET_SessionId=mklkvbdkfi2yoocgiy3acwjj;")
             .header("Sec-Fetch-Dest", "empty")
             .header("Sec-Fetch-Mode", "cors")
             .header("Sec-Fetch-Site", "same-origin")
@@ -127,7 +130,7 @@ async fn call_api(client: &Client, url: &str) -> Response {
 /*
 This command is copy-pasted as cURL from the network tab after accessing it in Firefox.
 It consistently works in a browser to fetch movies from the The Space API. The session cookies
-are removed from the code above because they are time-gated.
+are timed.
 
 curl 'https://www.thespacecinema.it/api/microservice/showings/cinemas/1011/films?minEmbargoLevel=2&includesSession=false&includeSessionAttributes=true' \
   --compressed \
@@ -140,7 +143,7 @@ curl 'https://www.thespacecinema.it/api/microservice/showings/cinemas/1011/films
   -H 'DNT: 1' \
   -H 'Sec-GPC: 1' \
   -H 'Connection: keep-alive' \
-  -H 'Cookie: cinemaId=1011; cinemaName=trieste; analyticsCinemaName=Trieste; cinemaCurrency=EUR; isSecondaryMarket=false; OptanonConsent=isGpcEnabled=1&datestamp=Wed+Jan+14+2026+16%3A32%3A05+GMT%2B0100+(Ora+standard+dell%E2%80%99Europa+centrale)&version=6.30.0&isIABGlobal=false&hosts=&genVendors=&consentId=842f2ecc-b4fd-464a-ac38-bc9188b36abf&interactionCount=2&landingPath=NotLandingPage&groups=C0001%3A1%2CC0002%3A0%2CC0003%3A1%2CC0004%3A0%2CC0005%3A0&geolocation=%3B&AwaitingReconsent=false; OptanonAlertBoxClosed=2026-01-14T11:19:07.215Z; microservicesToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxNzRlM2YxMS02ZDRmLTQ5YTAtOGNkNC01ODRlZGVmZGMxMDYiLCJDb3VudHJ5IjoiSVQiLCJBdXRoIjoiMyIsIlNob3dpbmciOiIzIiwiQm9va2luZyI6IjMiLCJQYXltZW50IjoiMyIsIlBhcnRuZXIiOiIwIiwiTG95YWx0eSI6IjMiLCJDYW1wYWlnblRyYWNraW5nQ29kZSI6IiIsIkNsaWVudE5hbWUiOiIiLCJuYmYiOjE3NjgzODk1NDMsImV4cCI6MTc2ODQzMjc0MywiaXNzIjoiUHJvZCJ9.y8Nbo_XAQPqFykSA5HLUv__c_m9Dx7moaYZVrbEiOxM; microservicesRefreshToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxNzRlM2YxMS02ZDRmLTQ5YTAtOGNkNC01ODRlZGVmZGMxMDYiLCJDb3VudHJ5IjoiSVQiLCJJc0Fub255bW91cyI6IlRydWUiLCJuYmYiOjE3NjgzODk1NDMsImV4cCI6MTc2ODk5NDM0MywiaXNzIjoiQXV0aFByb2QifQ.BiJPBDrrEyofEsf4P0RVP9zxp9s8MEtwdJwTFI6xuHg; accessTokenExpirationTime=2026-01-14T23%3A19%3A03Z; refreshTokenExpirationTime=2026-01-21T11%3A19%3A03Z; __cflb=02DiuE2nAGMFu3TxDimEkxSkFKsPnnKB65aKFsMoLTtNQ; vuecinemas-it#lang=it-IT; ASP.NET_SessionId=mklkvbdkfi2yoocgiy3acwjj; hasLayout=true' \
+  -H 'Cookie: cinemaId=1011; cinemaName=trieste; analyticsCinemaName=Trieste; cinemaCurrency=EUR; isSecondaryMarket=false; hasLayout=true; OptanonConsent=isGpcEnabled=1&datestamp=Wed+Jan+14+2026+16%3A32%3A05+GMT%2B0100+(Ora+standard+dell%E2%80%99Europa+centrale)&version=6.30.0&isIABGlobal=false&hosts=&genVendors=&consentId=842f2ecc-b4fd-464a-ac38-bc9188b36abf&interactionCount=2&landingPath=NotLandingPage&groups=C0001%3A1%2CC0002%3A0%2CC0003%3A1%2CC0004%3A0%2CC0005%3A0&geolocation=%3B&AwaitingReconsent=false; OptanonAlertBoxClosed=2026-01-14T11:19:07.215Z; microservicesToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxNzRlM2YxMS02ZDRmLTQ5YTAtOGNkNC01ODRlZGVmZGMxMDYiLCJDb3VudHJ5IjoiSVQiLCJBdXRoIjoiMyIsIlNob3dpbmciOiIzIiwiQm9va2luZyI6IjMiLCJQYXltZW50IjoiMyIsIlBhcnRuZXIiOiIwIiwiTG95YWx0eSI6IjMiLCJDYW1wYWlnblRyYWNraW5nQ29kZSI6IiIsIkNsaWVudE5hbWUiOiIiLCJuYmYiOjE3NjgzODk1NDMsImV4cCI6MTc2ODQzMjc0MywiaXNzIjoiUHJvZCJ9.y8Nbo_XAQPqFykSA5HLUv__c_m9Dx7moaYZVrbEiOxM; microservicesRefreshToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxNzRlM2YxMS02ZDRmLTQ5YTAtOGNkNC01ODRlZGVmZGMxMDYiLCJDb3VudHJ5IjoiSVQiLCJJc0Fub255bW91cyI6IlRydWUiLCJuYmYiOjE3NjgzODk1NDMsImV4cCI6MTc2ODk5NDM0MywiaXNzIjoiQXV0aFByb2QifQ.BiJPBDrrEyofEsf4P0RVP9zxp9s8MEtwdJwTFI6xuHg; accessTokenExpirationTime=2026-01-14T23%3A19%3A03Z; refreshTokenExpirationTime=2026-01-21T11%3A19%3A03Z; __cflb=02DiuE2nAGMFu3TxDimEkxSkFKsPnnKB65aKFsMoLTtNQ; vuecinemas-it#lang=it-IT; ASP.NET_SessionId=mklkvbdkfi2yoocgiy3acwjj;' \
   -H 'Sec-Fetch-Dest: empty' \
   -H 'Sec-Fetch-Mode: cors' \
   -H 'Sec-Fetch-Site: same-origin' \

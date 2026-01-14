@@ -16,14 +16,12 @@ use crate::{
     venues::cinemas::{MovieGroup, SPACE_NUKE},
 };
 
-pub async fn fetch(
-    client: &Client,
-    date_range: &DateRange,
-    movie_groups: &mut HashMap<String, MovieGroup>,
-) -> Result<()> {
+pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<MovieGroup>> {
     let progress = ProgressBar::new(0)
         .with_style(ProgressStyle::with_template(PROGRESS_BAR_TEMPLATE).unwrap())
         .with_message("Fetching TriesteCinema");
+
+    let mut movie_groups: HashMap<String, MovieGroup> = HashMap::new();
 
     let movie_list_sel = Selector::parse("div.media-body").unwrap();
     let cinema_sel = Selector::parse("h3.media-heading").unwrap();
@@ -69,7 +67,7 @@ pub async fn fetch(
                 .tags(tags.clone());
 
                 movie_groups
-                    .entry(base_title)
+                    .entry(base_title.clone())
                     .and_modify(|group| {
                         super::add_or_merge_to_group(group, &movie);
                         // triestecinema.it often doesn't have descriptions for
@@ -79,6 +77,7 @@ pub async fn fetch(
                         }
                     })
                     .or_insert_with(|| MovieGroup {
+                        title: base_title,
                         description,
                         movies: HashSet::from([movie]),
                     });
@@ -93,7 +92,7 @@ pub async fn fetch(
 
     progress.finish();
 
-    return Ok(());
+    return Ok(movie_groups.into_values().collect());
 }
 
 async fn get_description(client: &Client, href: &str) -> Result<Option<String>> {

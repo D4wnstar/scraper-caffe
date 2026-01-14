@@ -15,16 +15,42 @@ use reqwest::{self, Client};
 use crate::{
     dates::DateRange,
     events::Event,
-    venues::{cinemas, custom, theaters},
+    venues::{CacheManager, cinemas, custom, theaters},
 };
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Args {
-    #[arg(short, long, default_value_t = 7)]
+    #[arg(
+        short,
+        long,
+        default_value_t = 7,
+        help = "The number of days to fetch events for, today included"
+    )]
     days: u64,
 
-    #[arg(short, long)]
+    #[arg(
+        short,
+        long,
+        help = "Reuse cached events instead of fetching. If cache doesn't exist yet, fetch normally and create it"
+    )]
+    cache: bool,
+
+    #[arg(
+        short = 'R',
+        long,
+        help = "Forcefully recreate the cache. Does nothing without --cache"
+    )]
+    rebuild_cache: bool,
+
+    #[arg(
+        short,
+        long,
+        help = "Individual venues to rebuild, as a space-separate list of snake_case names. Does nothing without --cache"
+    )]
+    rebuild_venues: Option<String>,
+
+    #[arg(short, long, help = "Save markdown and HTML working files")]
     save_debug: bool,
 }
 
@@ -36,7 +62,7 @@ async fn main() -> Result<()> {
     let in_a_week = today.checked_add_days(Days::new(args.days - 1)).unwrap();
     let current_week = DateRange::new(today, in_a_week);
 
-    let _ = std::fs::create_dir("./qsat");
+    drop(std::fs::create_dir("qsat"));
     let filename = format!(
         "SettimanaTrieste_{}_{}",
         today.format("%d-%m"),
@@ -44,7 +70,7 @@ async fn main() -> Result<()> {
     );
     let maybe_filename = args.save_debug.then_some(filename.as_str()).or(None);
 
-    let events = fetch_events(&current_week).await;
+    let events = fetch_events(&current_week, &args).await;
     let markdown = write_markdown(events, &current_week, maybe_filename);
     let html = write_html(&markdown, maybe_filename);
     print_to_pdf(&html, &filename);
@@ -53,15 +79,28 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn fetch_events(time_period: &DateRange) -> Vec<Event> {
+async fn fetch_events(time_period: &DateRange, args: &Args) -> Vec<Event> {
     println!("Fetching events...");
     let client = Client::builder()
         .user_agent("Mozilla/5.0 (X11; Linux x86_64; rv:146.0) Gecko/20100101 Firefox/146.0")
         .build()
         .unwrap();
 
-    let movies = cinemas::fetch(&client, &time_period).await.unwrap();
-    let shows = theaters::fetch(&client, &time_period).await.unwrap();
+    let mut cache_manager = CacheManager::new(
+        "",
+        args.cache,
+        args.rebuild_cache,
+        args.rebuild_venues.clone().map_or(vec![], |list| {
+            list.split(" ").map(|s| s.to_string()).collect()
+        }),
+    );
+
+    let movies = cinemas::fetch(&client, &time_period, &mut cache_manager)
+        .await
+        .unwrap();
+    let shows = theaters::fetch(&client, &time_period, &mut cache_manager)
+        .await
+        .unwrap();
     let custom = custom::fetch("custom_events.toml", &time_period).unwrap();
 
     return [movies, shows, custom].concat();
