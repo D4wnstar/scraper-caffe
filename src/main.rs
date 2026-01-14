@@ -29,7 +29,10 @@ async fn main() -> Result<()> {
     );
 
     println!("Fetching events...");
-    let client = Client::builder().user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36").build().unwrap();
+    let client = Client::builder()
+        .user_agent("Mozilla/5.0 (X11; Linux x86_64; rv:146.0) Gecko/20100101 Firefox/146.0")
+        .build()
+        .unwrap();
     let movies = cinemas::fetch(&client, &current_week).await?;
     let shows = theaters::fetch(&client, &current_week).await?;
     let custom = custom::fetch("custom_events.toml", &current_week)?;
@@ -63,8 +66,8 @@ async fn main() -> Result<()> {
     // std::fs::write(format!("./qsat/{filename}.md"), &output).unwrap();
 
     println!("Converting to HTML...");
-    let mut html = comrak::markdown_to_html(&output, &comrak::Options::default());
-    html = html.replace("#", ""); // For some reason, the # character hard stops the print-to-PDF process at that location
+    let html = comrak::markdown_to_html(&output, &comrak::Options::default()).replace("#", "");
+    // For some reason, the # character hard stops the print-to-PDF process at that location
     // std::fs::write(format!("./qsat/{filename}.html"), &html).unwrap();
 
     println!("Printing to PDF...");

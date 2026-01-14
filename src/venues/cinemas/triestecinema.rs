@@ -13,7 +13,7 @@ use crate::{
     dates::DateRange,
     events::Event,
     utils::PROGRESS_BAR_TEMPLATE,
-    venues::cinemas::{MovieGroup, SPACE_NUKE, clean_title},
+    venues::cinemas::{MovieGroup, SPACE_NUKE},
 };
 
 pub async fn fetch(
@@ -56,7 +56,8 @@ pub async fn fetch(
                 .collect();
 
             for (title, href) in links {
-                let (title, base_title, id, tags) = clean_title(title);
+                let (title, base_title, tags) = super::clean_title(title);
+                let id = super::make_id(&base_title, &tags);
                 let description = get_description(client, href).await?;
 
                 let movie = Event::new(
@@ -70,20 +71,9 @@ pub async fn fetch(
                 movie_groups
                     .entry(base_title)
                     .and_modify(|group| {
-                        // Add the movie
-                        if group.movies.contains(&movie) {
-                            // Merge location if the variant already exists
-                            let mut existing_variant = group.movies.take(&movie).unwrap();
-                            existing_variant.locations.extend(movie.locations.clone());
-                            group.movies.insert(existing_variant);
-                        } else {
-                            group.movies.insert(movie.clone());
-                        };
-
-                        // If the group doesn't yet have a description, add it
-                        // Since movies are fetched in random order, also give priority
-                        // to the base (no tags) variant's description, which is usually
-                        // the most accurate
+                        super::add_or_merge_to_group(group, &movie);
+                        // triestecinema.it often doesn't have descriptions for
+                        // tagged variants, so make sure to give that priority
                         if group.description.is_none() || tags.len() == 0 {
                             group.description = description.clone();
                         }

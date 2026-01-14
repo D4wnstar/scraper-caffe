@@ -21,7 +21,7 @@ impl fmt::Display for Event {
         let tags = self
             .tags
             .iter()
-            .fold(String::new(), |acc, tag| format!("{acc} [{tag}]"));
+            .fold(String::new(), |acc, tag| format!("{acc} **[{tag}]**"));
 
         let date = self
             .date

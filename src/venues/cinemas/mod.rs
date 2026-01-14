@@ -56,21 +56,28 @@ pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Even
     return Ok(movies);
 }
 
-pub(super) fn clean_title(title: &str) -> (String, String, String, HashSet<String>) {
+pub(super) fn clean_title(title: &str) -> (String, String, HashSet<String>) {
     // Full title to be displayed
     let mut new_title = title
         .to_lowercase()
         .replace("ultimi giorni", "")
         .replace(" / ultimo giorno", "")
         .replace("4k", "")
+        .replace("a'", "à")
+        .replace("e'", "è")
         .trim()
         .to_string();
 
-    // Variants
-    let mut tags: Vec<String> = Vec::new();
+    // Annoyances
+    new_title = LEONE.replace_all(&new_title, "").to_string();
+    new_title = HYPHENS.replace_all(&new_title, ": ").to_string();
+    new_title = SPACE_NUKE.replace_all(&new_title, "$1").to_string();
+
+    // Possible tags
+    let mut tags: HashSet<String> = HashSet::new();
     let mut extract = |text: &str, search: &str, tag: &str| {
         if text.contains(search) {
-            tags.push(tag.to_string());
+            tags.insert(tag.to_string());
         }
         return text.replace(search, "");
     };
@@ -78,28 +85,30 @@ pub(super) fn clean_title(title: &str) -> (String, String, String, HashSet<Strin
 
     let mut extract_re = |text: &str, search: &Regex, tag: &str| {
         if search.is_match(text).unwrap() {
-            tags.push(tag.to_string());
+            tags.insert(tag.to_string());
         }
         return search.replace_all(text, "").to_string();
     };
     new_title = extract_re(&new_title, &ORIGINAL_LANG, "Originale Sottotitolato");
 
-    // Annoyances
-    new_title = LEONE.replace_all(&new_title, "").to_string();
-    new_title = HYPHENS.replace_all(&new_title, ": ").to_string();
-    new_title = SPACE_NUKE.replace_all(&new_title, "$1").to_string();
-
     // Base title without subtitle
-    let base_title = SUBTITLE_STRIPPER
-        .replace_all(&new_title, "")
-        .trim()
-        .to_string();
+    let base_title = SUBTITLE_STRIPPER.replace_all(&new_title, "");
 
-    // Identifier inclusive of tags
-    let mut id = base_title.clone();
+    return (
+        new_title.trim().to_string(),
+        base_title.trim().to_string(),
+        tags,
+    );
+}
+
+/// Make an identifier that's inclusive of tags to differentiate the same movie
+/// in different contexts (e.g., 2D vs. 3D vs. original language).
+pub(super) fn make_id(base_title: &str, tags: &HashSet<String>) -> String {
+    let mut id = base_title.to_string();
     if !tags.is_empty() {
-        tags.sort();
-        let tag_id = tags
+        let mut tags_vec: Vec<String> = tags.iter().cloned().collect();
+        tags_vec.sort();
+        let tag_id = tags_vec
             .iter()
             .fold(String::new(), |acc, new| format!("{acc} {new}"))
             .trim()
@@ -113,10 +122,16 @@ pub(super) fn clean_title(title: &str) -> (String, String, String, HashSet<Strin
         .replace(" ", "_")
         .to_lowercase();
 
-    return (
-        new_title.trim().to_string(),
-        base_title,
-        id.trim().to_string(),
-        tags.into_iter().collect(),
-    );
+    return id;
+}
+
+pub(super) fn add_or_merge_to_group(group: &mut MovieGroup, movie: &Event) {
+    if group.movies.contains(movie) {
+        // Merge location if the variant already exists
+        let mut existing_variant = group.movies.take(movie).unwrap();
+        existing_variant.locations.extend(movie.locations.clone());
+        group.movies.insert(existing_variant);
+    } else {
+        group.movies.insert(movie.clone());
+    };
 }
