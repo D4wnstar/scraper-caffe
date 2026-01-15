@@ -7,9 +7,13 @@ use indicatif::{ProgressBar, ProgressFinish, ProgressIterator, ProgressStyle};
 use reqwest::Client;
 use scraper::{Html, Selector};
 
-use crate::{dates::DateRange, events::Event, utils::PROGRESS_BAR_TEMPLATE};
+use crate::{
+    dates::{DateRange, DateSet, TimeFrame},
+    events::Event,
+    utils::PROGRESS_BAR_TEMPLATE,
+};
 
-pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Event>> {
+pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>> {
     let mut events: HashSet<Event> = HashSet::new();
 
     let url = "https://www.miela.it/calendario/";
@@ -43,15 +47,16 @@ pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Even
         let date_str = show
             .attr("data-calendar-day")
             .expect("Each calendar day should have a date");
-        let date_range = parse_date(&date_str).expect("Date should be in a standardized format");
+        let dates = parse_date(&date_str).expect("Date should be in a standardized format");
 
         // Skip events not in the current week
-        if !date_range.overlaps(&current_week) {
+        if !dates.as_range().overlaps(&date_range) {
             continue;
         }
 
-        let event = Event::new(&title, HashSet::from_iter(["Miela".to_string()]), "Teatri")
-            .date(Some(date_range));
+        let location = HashSet::from_iter(["Miela".to_string()]);
+        let time_frame = TimeFrame::Dates(dates);
+        let event = Event::new(&title, location, "Teatri").with_time_frame(Some(time_frame));
         events.insert(event);
     }
 
@@ -62,7 +67,7 @@ pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Even
 ///
 /// This function handles the format: "20260109" (YYYYMMDD)
 /// which is stored in the data-calendar-day attribute
-fn parse_date(date_str: &str) -> Option<DateRange> {
+fn parse_date(date_str: &str) -> Option<DateSet> {
     // The date_str is in format "20260109" (YYYYMMDD)
     // Extract year, month, and day
     if date_str.len() != 8 {
@@ -80,7 +85,7 @@ fn parse_date(date_str: &str) -> Option<DateRange> {
     let date = NaiveDate::from_ymd_opt(year, month, day)?;
 
     // For single dates, create a date range that spans one day
-    return Some(DateRange::new(date, date));
+    return Some(DateSet::new(vec![date]).unwrap());
 }
 
 #[cfg(test)]
@@ -92,18 +97,9 @@ mod tests {
     #[test]
     fn test_parse_miela_date() {
         let range = parse_date("20260109").unwrap();
-        assert_eq!(range.start_date.day(), 9);
-        assert_eq!(range.end_date.day(), 9);
-        assert_eq!(range.start_date.month(), 1);
-        assert_eq!(range.start_date.year(), 2026);
-    }
-
-    #[test]
-    fn test_parse_miela_date_with_leading_zero() {
-        let range = parse_date("20260101").unwrap();
-        assert_eq!(range.start_date.day(), 1);
-        assert_eq!(range.end_date.day(), 1);
-        assert_eq!(range.start_date.month(), 1);
-        assert_eq!(range.start_date.year(), 2026);
+        assert_eq!(range.first().day(), 9);
+        assert_eq!(range.last().day(), 9);
+        assert_eq!(range.first().month(), 1);
+        assert_eq!(range.first().year(), 2026);
     }
 }

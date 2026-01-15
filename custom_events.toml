@@ -1,12 +1,19 @@
 # File per eventi manuali
 # Inteso per eventi da posti che non hanno un sito web
-# Formato: YYYY-MM-DD per date singole, YYYY-MM-DD/YYYY-MM-DD per periodi
+# Formato date: array di "DD-MM-YYYY" per TimeFrame::Dates,
+# "DD-MM-YYYY/DD-MM-YYYY" per TimeFrame::Period
 # La categoria dovrebbe essere plurale (e.g., "Mercatini" anziché "Mercatino")
 
-# Esempio:
+# Esempi:
 #
 # [[events]]
 # title = "Mercatino di Natale"
-# date = "2025-12-21/2026-01-06"
+# date = "21-12-2025/06-01-2026"
 # locations = ["Cavana", "Ponterosso"]
 # category = "Mercatini"
+#
+# [[events]]
+# title = "Concerto di Natale"
+# date = ["21-12-2025", "23-12-2025"]
+# locations = ["Cavana", "Ponterosso"]
+# category = "Concerti"

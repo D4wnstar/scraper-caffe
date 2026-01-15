@@ -45,13 +45,13 @@ impl MovieGroup {
 
 pub async fn fetch(
     client: &Client,
-    time_period: &DateRange,
+    date_range: &DateRange,
     cache_manager: &mut CacheManager,
 ) -> Result<Vec<Event>> {
     cache_manager.set_category("cinema");
     let triestecinema = cache_manager
         .get_or_fetch("triestecinema", async || {
-            triestecinema::fetch(client, time_period).await
+            triestecinema::fetch(client, date_range).await
         })
         .await?;
     let the_space = cache_manager

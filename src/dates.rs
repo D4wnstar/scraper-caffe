@@ -1,45 +1,95 @@
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
-use std::fmt;
 
-/// Represents a date range that can be used for filtering and comparisons
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DateRange {
-    pub start_date: NaiveDate,
-    pub end_date: NaiveDate,
+/// A set of dates, such as the days on which as event occurs.
+/// Also usable to represent a span of time by adding the first and
+/// last dates of the span. There must be at least one date.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DateSet {
+    dates: Vec<NaiveDate>,
 }
 
-impl fmt::Display for DateRange {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.start_date != self.end_date {
-            let start = self.start_date.format("%d %b %Y");
-            let end = self.end_date.format("%d %b %Y");
-            write!(f, "da {start} a {end}",)
+impl DateSet {
+    /// Create a new [DateSet].
+    /// # Errors
+    /// Returns `None` if the input vector is empty.
+    pub fn new(dates: Vec<NaiveDate>) -> Option<Self> {
+        if dates.is_empty() {
+            None
         } else {
-            let start = self.start_date.format("%d %b %Y");
-            write!(f, "il {start}")
+            Some(Self { dates })
         }
-    }
-}
-
-impl DateRange {
-    /// Create a new DateRange
-    pub fn new(start_date: NaiveDate, end_date: NaiveDate) -> Self {
-        Self {
-            start_date,
-            end_date,
-        }
-    }
-
-    /// Check if this date range overlaps with another date range
-    pub fn overlaps(&self, other: &DateRange) -> bool {
-        self.start_date <= other.end_date && self.end_date >= other.start_date
     }
 
     #[allow(unused)]
-    /// Check if a specific date is within this date range
-    pub fn contains(&self, date: NaiveDate) -> bool {
-        date >= self.start_date && date <= self.end_date
+    pub fn dates(&self) -> &Vec<NaiveDate> {
+        &self.dates
+    }
+
+    /// Returns the first date in chronological order.
+    pub fn first(&self) -> NaiveDate {
+        self.dates
+            .iter()
+            .reduce(|min, curr| min.min(curr))
+            .unwrap()
+            .clone()
+    }
+
+    /// Returns the last date in chronological order.
+    pub fn last(&self) -> NaiveDate {
+        self.dates
+            .iter()
+            .reduce(|max, curr| max.max(curr))
+            .unwrap()
+            .clone()
+    }
+
+    /// Returns a [DateRange] with the first and last dates of this set.
+    pub fn as_range(&self) -> DateRange {
+        DateRange {
+            start: self.first(),
+            end: self.last(),
+        }
+    }
+}
+
+/// A period of time represented by a start and an end date.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DateRange {
+    pub start: NaiveDate,
+    pub end: NaiveDate,
+}
+
+impl DateRange {
+    pub fn new(start: NaiveDate, end: NaiveDate) -> Self {
+        Self { start, end }
+    }
+
+    /// Returns the distance in days between the first and last dates of the set.
+    pub fn days_spanned(&self) -> i64 {
+        (self.end - self.start).num_days()
+    }
+
+    /// Checks if this [DateRange] overlaps with another.
+    pub fn overlaps(&self, other: &DateRange) -> bool {
+        self.start <= other.end && self.end >= other.start
+    }
+}
+
+/// A representation of a time frame, either as a discrete set of dates
+/// (a [DateSet]) or a continuous period of time (a [DateRange]).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum TimeFrame {
+    Dates(DateSet),
+    Period(DateRange),
+}
+
+impl TimeFrame {
+    pub fn as_range(&self) -> DateRange {
+        match self {
+            TimeFrame::Dates(set) => set.as_range(),
+            TimeFrame::Period(range) => range.clone(),
+        }
     }
 }
 

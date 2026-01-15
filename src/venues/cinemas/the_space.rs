@@ -75,8 +75,8 @@ pub async fn fetch(client: &Client) -> Result<Vec<MovieGroup>> {
                 HashSet::from_iter(["The Space".to_string()]),
                 "Film",
             )
-            .id(id)
-            .tags(tags);
+            .with_id(id)
+            .with_tags(tags);
 
             movie_groups
                 .entry(base_title.clone())

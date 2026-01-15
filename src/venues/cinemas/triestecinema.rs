@@ -28,8 +28,7 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<MovieG
     let title_sel = Selector::parse("a.oggi").unwrap();
 
     // Fetch movies from TriesteCinema for each request day
-    let days = (date_range.end_date - date_range.start_date).num_days();
-    for delta in 0..=days {
+    for delta in 0..=date_range.days_spanned() {
         let cinema_url = format!("https://www.triestecinema.it/index.php?pag=orari&delta={delta}");
         let html_body = client.get(cinema_url).send().await?.text().await?;
         let document = Html::parse_document(&html_body);
@@ -63,8 +62,8 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<MovieG
                     HashSet::from_iter([cinema.to_string()]),
                     "Film",
                 )
-                .id(id)
-                .tags(tags.clone());
+                .with_id(id)
+                .with_tags(tags.clone());
 
                 movie_groups
                     .entry(base_title.clone())

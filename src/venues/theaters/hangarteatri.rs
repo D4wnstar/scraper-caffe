@@ -8,12 +8,12 @@ use reqwest::Client;
 use scraper::{Html, Selector};
 
 use crate::{
-    dates::{DateRange, italian_month_to_number},
+    dates::{DateRange, DateSet, TimeFrame, italian_month_to_number},
     events::Event,
     utils::PROGRESS_BAR_TEMPLATE,
 };
 
-pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Event>> {
+pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>> {
     let mut events: HashSet<Event> = HashSet::new();
 
     let url = "https://www.hangarteatri.com/eventi/";
@@ -58,19 +58,16 @@ pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Even
             .to_string();
 
         // Parse the date from the datetime attribute
-        let date_range = parse_date(&date_str).expect("Date should be in a standardized format");
+        let dates = parse_date(&date_str).expect("Date should be in a standardized format");
 
         // Skip events not in the current week
-        if !date_range.overlaps(&current_week) {
+        if !dates.as_range().overlaps(&date_range) {
             continue;
         }
 
-        let event = Event::new(
-            &title,
-            HashSet::from_iter(["Hangar Teatri".to_string()]),
-            "Teatri",
-        )
-        .date(Some(date_range));
+        let location = HashSet::from_iter(["Hangar Teatri".to_string()]);
+        let time_frame = TimeFrame::Dates(dates);
+        let event = Event::new(&title, location, "Teatri").with_time_frame(Some(time_frame));
         events.insert(event);
     }
 
@@ -81,9 +78,8 @@ pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Even
 ///
 /// This function handles these formats:
 /// - Single dates with time: "9 Gennaio 2026 @ 20:30"
-/// - Date ranges with time: "9 Gennaio 2026 @ 20:30 - 22:00"
-/// - Single dates without time: "10 Gennaio 2026 @ 19:00"
-fn parse_date(date_str: &str) -> Option<DateRange> {
+/// - Single dates with time ranges: "9 Gennaio 2026 @ 20:30 - 22:00"
+fn parse_date(date_str: &str) -> Option<DateSet> {
     let trimmed = date_str.trim();
     if trimmed.is_empty() {
         return None;
@@ -92,20 +88,9 @@ fn parse_date(date_str: &str) -> Option<DateRange> {
     // Extract just the date part (before @)
     let date_part = trimmed.split('@').next().unwrap().trim();
 
-    // Check if it's a single date or a range
-    if date_part.contains('-') {
-        return parse_date_range(date_part);
-    } else {
-        return parse_single_date(date_part);
-    }
-}
-
-/// Parse a single date string (e.g., "9 Gennaio 2026")
-fn parse_single_date(date_str: &str) -> Option<DateRange> {
-    let parts: Vec<&str> = date_str.split_whitespace().collect();
-
     // Expected format: [day] [month] [year]
     // Indexes:         0     1       2
+    let parts: Vec<&str> = date_part.split_whitespace().collect();
     if parts.len() != 3 {
         return None;
     }
@@ -117,23 +102,7 @@ fn parse_single_date(date_str: &str) -> Option<DateRange> {
     let date = NaiveDate::from_ymd_opt(year, month, day)?;
 
     // For single dates, create a date range that spans one day
-    return Some(DateRange::new(date, date));
-}
-
-/// Parse a date range string (e.g., "9 Gennaio 2026 - 10 Gennaio 2026")
-fn parse_date_range(date_str: &str) -> Option<DateRange> {
-    let parts: Vec<&str> = date_str.split('-').collect();
-
-    // Expected format: [start_date] - [end_date]
-    // Indexes:         0           1
-    if parts.len() != 2 {
-        return None;
-    }
-
-    let start_date = parse_single_date(parts[0].trim())?;
-    let end_date = parse_single_date(parts[1].trim())?;
-
-    return Some(DateRange::new(start_date.start_date, end_date.end_date));
+    return Some(DateSet::new(vec![date]).unwrap());
 }
 
 #[cfg(test)]
@@ -144,40 +113,19 @@ mod tests {
 
     #[test]
     fn test_single_date() {
-        let range = parse_date("9 Gennaio 2026 @ 20:30").unwrap();
-        assert_eq!(range.start_date.day(), 9);
-        assert_eq!(range.end_date.day(), 9); // Single date = same start and end
-        assert_eq!(range.start_date.month(), 1);
-        assert_eq!(range.start_date.year(), 2026);
+        let set = parse_date("9 Gennaio 2026 @ 20:30").unwrap();
+        assert_eq!(set.first().day(), 9);
+        assert_eq!(set.last().day(), 9); // Single date = same start and end
+        assert_eq!(set.first().month(), 1);
+        assert_eq!(set.first().year(), 2026);
     }
 
     #[test]
     fn test_single_date_without_time() {
         let range = parse_date("10 Gennaio 2026 @ 19:00").unwrap();
-        assert_eq!(range.start_date.day(), 10);
-        assert_eq!(range.end_date.day(), 10);
-        assert_eq!(range.start_date.month(), 1);
-        assert_eq!(range.start_date.year(), 2026);
-    }
-
-    #[test]
-    fn test_date_range() {
-        let result = parse_date("9 Gennaio 2026 @ 20:30 - 22:00").unwrap();
-        assert_eq!(result.start_date.day(), 9);
-        assert_eq!(result.start_date.month(), 1);
-        assert_eq!(result.start_date.year(), 2026);
-        assert_eq!(result.end_date.day(), 9);
-        assert_eq!(result.end_date.month(), 1);
-        assert_eq!(result.end_date.year(), 2026);
-    }
-
-    #[test]
-    fn test_date_range_contains() {
-        let range = parse_date("9 Gennaio 2026 @ 20:30 - 22:00").unwrap();
-        let test_date = NaiveDate::from_ymd_opt(2026, 1, 9).unwrap();
-        assert!(range.contains(test_date));
-
-        let test_date2 = NaiveDate::from_ymd_opt(2026, 1, 10).unwrap();
-        assert!(!range.contains(test_date2));
+        assert_eq!(range.first().day(), 10);
+        assert_eq!(range.last().day(), 10);
+        assert_eq!(range.first().month(), 1);
+        assert_eq!(range.first().year(), 2026);
     }
 }

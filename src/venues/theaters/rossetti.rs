@@ -8,12 +8,12 @@ use reqwest::Client;
 use scraper::{Html, Selector};
 
 use crate::{
-    dates::{DateRange, italian_month_to_number},
+    dates::{DateRange, DateSet, TimeFrame, italian_month_to_number},
     events::Event,
     utils::PROGRESS_BAR_TEMPLATE,
 };
 
-pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Event>> {
+pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>> {
     let mut events: HashSet<Event> = HashSet::new();
 
     let url = "https://www.ilrossetti.it/it/stagione/cartellone";
@@ -55,19 +55,20 @@ pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Even
             .expect("Second text element should always be the date")
             .trim()
             .to_string();
-        let date_range = parse_date(&date_str).expect("Date should be in a standardized format");
+        let dates = parse_date(&date_str).expect("Date should be in a standardized format");
+
+        // FIXME: Rossetti display date ranges on the URL used and the actual shows have
+        // multiple showtimes within that range. However, the dates are shown in the show's
+        // own page. Need to also handle proper dates when description fetching is implemented
 
         // Skip events not in the current week
-        if !date_range.overlaps(&current_week) {
+        if !dates.as_range().overlaps(&date_range) {
             continue;
         }
 
-        let event = Event::new(
-            &title,
-            HashSet::from_iter(["Rossetti".to_string()]),
-            "Teatri",
-        )
-        .date(Some(date_range));
+        let location = HashSet::from_iter(["Rossetti".to_string()]);
+        let time_frame = TimeFrame::Dates(dates);
+        let event = Event::new(&title, location, "Teatri").with_time_frame(Some(time_frame));
         events.insert(event);
     }
 
@@ -81,7 +82,7 @@ pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Even
 /// - Date ranges with same month: "23 - 24 Set 2025"
 /// - Date ranges spanning months: "8 - 19 Ott 2025", "27/2 - 1/3 2026"
 /// - Date ranges with different year formats: "30/12/2025 - 1/1/2026"
-fn parse_date(date_str: &str) -> Option<DateRange> {
+fn parse_date(date_str: &str) -> Option<DateSet> {
     let trimmed = date_str.trim();
     if trimmed.is_empty() {
         return None;
@@ -97,7 +98,7 @@ fn parse_date(date_str: &str) -> Option<DateRange> {
 }
 
 /// Parse a single date string (e.g., "22 Set 2025")
-fn parse_single_date(date_str: &str) -> Option<DateRange> {
+fn parse_single_date(date_str: &str) -> Option<DateSet> {
     let parts: Vec<&str> = date_str.split_whitespace().collect();
 
     // Expected format: [day] [month] [year]
@@ -111,11 +112,11 @@ fn parse_single_date(date_str: &str) -> Option<DateRange> {
     let date = NaiveDate::parse_from_str(&date_str, "%d/%m/%Y").ok()?;
 
     // For single dates, create a date range that spans one day
-    return Some(DateRange::new(date, date));
+    return Some(DateSet::new(vec![date]).unwrap());
 }
 
 /// Parse a date range string
-fn parse_date_range(date_str: &str) -> Option<DateRange> {
+fn parse_date_range(date_str: &str) -> Option<DateSet> {
     // Handle different date range formats
 
     // Format 1: "23 - 24 Set 2025" (same month)
@@ -138,7 +139,7 @@ fn parse_date_range(date_str: &str) -> Option<DateRange> {
 }
 
 /// Parse date range with same month (e.g., "23 - 24 Set 2025")
-fn parse_same_month_range(date_str: &str) -> Option<DateRange> {
+fn parse_same_month_range(date_str: &str) -> Option<DateSet> {
     let parts: Vec<&str> = date_str.split_whitespace().collect();
 
     // Expected format: [start_day] - [end_day] [month] [year]
@@ -153,11 +154,11 @@ fn parse_same_month_range(date_str: &str) -> Option<DateRange> {
     let end_str = format!("{}/{}/{}", parts[2], month, parts[4]); // e.g. 24/9/2025
     let end_date = NaiveDate::parse_from_str(&end_str, "%d/%m/%Y").ok()?;
 
-    return Some(DateRange::new(start_date, end_date));
+    return Some(DateSet::new(vec![start_date, end_date]).unwrap());
 }
 
 /// Parse date range with slash format (e.g., "27/2 - 1/3 2026")
-fn parse_slash_date_range(date_str: &str) -> Option<DateRange> {
+fn parse_slash_date_range(date_str: &str) -> Option<DateSet> {
     let parts: Vec<&str> = date_str.split_whitespace().collect();
 
     // Expected format: [start_day]/[start_month] - [end_day]/[end_month] [year]
@@ -171,11 +172,11 @@ fn parse_slash_date_range(date_str: &str) -> Option<DateRange> {
     let end_str = format!("{}/{}", parts[2], parts[3]); // e.g. 1/3/2026
     let end_date = NaiveDate::parse_from_str(&end_str, "%d/%m/%Y").ok()?;
 
-    return Some(DateRange::new(start_date, end_date));
+    return Some(DateSet::new(vec![start_date, end_date]).unwrap());
 }
 
 /// Parse date range with full date format (e.g., "30/12/2025 - 1/1/2026")
-fn parse_full_date_range(date_str: &str) -> Option<DateRange> {
+fn parse_full_date_range(date_str: &str) -> Option<DateSet> {
     let parts: Vec<&str> = date_str.split(" - ").collect();
 
     // Expected format: [start_day]/[start_month]/[start_year] - [end_day]/[end_month]/[end_year]
@@ -187,7 +188,7 @@ fn parse_full_date_range(date_str: &str) -> Option<DateRange> {
     let start_date = NaiveDate::parse_from_str(parts[0], "%d/%m/%Y").ok()?;
     let end_date = NaiveDate::parse_from_str(parts[1], "%d/%m/%Y").ok()?;
 
-    return Some(DateRange::new(start_date, end_date));
+    return Some(DateSet::new(vec![start_date, end_date]).unwrap());
 }
 
 #[cfg(test)]
@@ -198,63 +199,43 @@ mod tests {
 
     #[test]
     fn test_single_date() {
-        let range = parse_date("22 Set 2025").unwrap();
-        assert_eq!(range.start_date.day(), 22);
-        assert_eq!(range.end_date.day(), 22); // Single date = same start and end
-        assert_eq!(range.start_date.month(), 9);
-        assert_eq!(range.start_date.year(), 2025);
+        let set = parse_date("22 Set 2025").unwrap();
+        assert_eq!(set.first().day(), 22);
+        assert_eq!(set.last().day(), 22); // Single date = same start and end
+        assert_eq!(set.first().month(), 9);
+        assert_eq!(set.first().year(), 2025);
     }
 
     #[test]
-    fn test_same_month_range() {
+    fn test_same_month_set() {
         let result = parse_date("23 - 24 Set 2025").unwrap();
-        assert_eq!(result.start_date.day(), 23);
-        assert_eq!(result.start_date.month(), 9);
-        assert_eq!(result.start_date.year(), 2025);
-        assert_eq!(result.end_date.day(), 24);
-        assert_eq!(result.end_date.month(), 9);
-        assert_eq!(result.end_date.year(), 2025);
+        assert_eq!(result.first().day(), 23);
+        assert_eq!(result.first().month(), 9);
+        assert_eq!(result.first().year(), 2025);
+        assert_eq!(result.last().day(), 24);
+        assert_eq!(result.last().month(), 9);
+        assert_eq!(result.last().year(), 2025);
     }
 
     #[test]
-    fn test_slash_date_range() {
+    fn test_slash_date_set() {
         let result = parse_date("27/2 - 1/3 2026").unwrap();
-        assert_eq!(result.start_date.day(), 27);
-        assert_eq!(result.start_date.month(), 2);
-        assert_eq!(result.start_date.year(), 2026);
-        assert_eq!(result.end_date.day(), 1);
-        assert_eq!(result.end_date.month(), 3);
-        assert_eq!(result.end_date.year(), 2026);
+        assert_eq!(result.first().day(), 27);
+        assert_eq!(result.first().month(), 2);
+        assert_eq!(result.first().year(), 2026);
+        assert_eq!(result.last().day(), 1);
+        assert_eq!(result.last().month(), 3);
+        assert_eq!(result.last().year(), 2026);
     }
 
     #[test]
-    fn test_full_date_range() {
+    fn test_full_date_set() {
         let result = parse_date("30/12/2025 - 1/1/2026").unwrap();
-        assert_eq!(result.start_date.day(), 30);
-        assert_eq!(result.start_date.month(), 12);
-        assert_eq!(result.start_date.year(), 2025);
-        assert_eq!(result.end_date.day(), 1);
-        assert_eq!(result.end_date.month(), 1);
-        assert_eq!(result.end_date.year(), 2026);
-    }
-
-    #[test]
-    fn test_date_range_contains() {
-        let range = parse_date("23 - 24 Set 2025").unwrap();
-        let test_date = NaiveDate::from_ymd_opt(2025, 9, 23).unwrap();
-        assert!(range.contains(test_date));
-
-        let test_date2 = NaiveDate::from_ymd_opt(2025, 9, 30).unwrap();
-        assert!(!range.contains(test_date2));
-    }
-
-    #[test]
-    fn test_date_range_overlaps() {
-        let range1 = parse_date("23 - 24 Set 2025").unwrap();
-        let range2 = parse_date("24 - 25 Set 2025").unwrap();
-        let range3 = parse_date("26 - 27 Set 2025").unwrap();
-
-        assert!(range1.overlaps(&range2)); // Overlapping
-        assert!(!range1.overlaps(&range3)); // Not overlapping
+        assert_eq!(result.first().day(), 30);
+        assert_eq!(result.first().month(), 12);
+        assert_eq!(result.first().year(), 2025);
+        assert_eq!(result.last().day(), 1);
+        assert_eq!(result.last().month(), 1);
+        assert_eq!(result.last().year(), 2026);
     }
 }

@@ -7,12 +7,12 @@ use reqwest::Client;
 use scraper::{Html, Selector};
 
 use crate::{
-    dates::{DateRange, italian_month_to_number},
+    dates::{DateRange, DateSet, TimeFrame, italian_month_to_number},
     events::Event,
     utils::PROGRESS_BAR_TEMPLATE,
 };
 
-pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Event>> {
+pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>> {
     let mut events: HashSet<Event> = HashSet::new();
 
     let url = "https://www.teatroverdi-trieste.com/it/calendario-spettacoli/";
@@ -41,15 +41,16 @@ pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Even
             continue;
         }
         let date_str = date_el.unwrap().text().next().unwrap();
-        let date_range = parse_date(date_str).expect("Date should be in a standardized format");
+        let dates = parse_date(date_str).expect("Date should be in a standardized format");
 
         // Skip events not in the current week
-        if !date_range.overlaps(&current_week) {
+        if !dates.as_range().overlaps(&date_range) {
             continue;
         }
 
-        let event = Event::new(&title, HashSet::from_iter(["Verdi".to_string()]), "Teatri")
-            .date(Some(date_range));
+        let location = HashSet::from_iter(["Verdi".to_string()]);
+        let time_frame = TimeFrame::Dates(dates);
+        let event = Event::new(&title, location, "Teatri").with_time_frame(Some(time_frame));
         events.insert(event);
     }
 
@@ -61,7 +62,7 @@ pub async fn fetch(client: &Client, current_week: &DateRange) -> Result<Vec<Even
 /// This function handles these formats:
 /// - Single dates: "Martedì 23 dicembre 2025 ore 19.30"
 /// - Multiple dates: "28, 30 novembre, 5, 7, 11, 13 dicembre 2025"
-fn parse_date(date_str: &str) -> Option<DateRange> {
+fn parse_date(date_str: &str) -> Option<DateSet> {
     let trimmed = date_str.trim();
     if trimmed.is_empty() {
         return None;
@@ -75,7 +76,7 @@ fn parse_date(date_str: &str) -> Option<DateRange> {
 }
 
 /// Parse a single date string (e.g., "Martedì 23 dicembre 2025 ore 19.30")
-fn parse_single_date(date_str: &str) -> Option<DateRange> {
+fn parse_single_date(date_str: &str) -> Option<DateSet> {
     let parts: Vec<&str> = date_str.split_whitespace().collect();
 
     // Expected format: [day_name] [day] [month] [year] ore [time]
@@ -89,11 +90,11 @@ fn parse_single_date(date_str: &str) -> Option<DateRange> {
     let date = NaiveDate::parse_from_str(&date_str, "%d/%m/%Y").ok()?;
 
     // For single dates, create a date range that spans one day
-    return Some(DateRange::new(date, date));
+    return Some(DateSet::new(vec![date]).unwrap());
 }
 
 /// Parse multiple dates string (e.g., "28, 30 novembre, 5, 7, 11, 13 dicembre 2025")
-fn parse_multiple_dates(date_str: &str) -> Option<DateRange> {
+fn parse_multiple_dates(date_str: &str) -> Option<DateSet> {
     // Split by comma to get individual date parts
     let parts: Vec<&str> = date_str.split(',').collect();
 
@@ -174,14 +175,9 @@ fn parse_multiple_dates(date_str: &str) -> Option<DateRange> {
 
     if dates.is_empty() {
         return None;
+    } else {
+        return Some(DateSet::new(dates).unwrap());
     }
-
-    // Sort dates to find the earliest and latest
-    dates.sort();
-    let start_date = dates[0];
-    let end_date = dates[dates.len() - 1];
-
-    return Some(DateRange::new(start_date, end_date));
 }
 
 #[cfg(test)]
@@ -193,60 +189,40 @@ mod tests {
     #[test]
     fn test_single_date() {
         let range = parse_date("Martedì 23 dicembre 2025 ore 19.30").unwrap();
-        assert_eq!(range.start_date.day(), 23);
-        assert_eq!(range.end_date.day(), 23); // Single date = same start and end
-        assert_eq!(range.start_date.month(), 12);
-        assert_eq!(range.start_date.year(), 2025);
+        assert_eq!(range.first().day(), 23);
+        assert_eq!(range.last().day(), 23); // Single date = same start and end
+        assert_eq!(range.first().month(), 12);
+        assert_eq!(range.first().year(), 2025);
     }
 
     #[test]
     fn test_single_date_without_time() {
         let range = parse_date("Mercoledì 31 dicembre 2025").unwrap();
-        assert_eq!(range.start_date.day(), 31);
-        assert_eq!(range.end_date.day(), 31);
-        assert_eq!(range.start_date.month(), 12);
-        assert_eq!(range.start_date.year(), 2025);
+        assert_eq!(range.first().day(), 31);
+        assert_eq!(range.last().day(), 31);
+        assert_eq!(range.first().month(), 12);
+        assert_eq!(range.first().year(), 2025);
     }
 
     #[test]
     fn test_multiple_dates_same_month() {
         let result = parse_date("9, 10, 11, 13 gennaio 2026").unwrap();
-        assert_eq!(result.start_date.day(), 9);
-        assert_eq!(result.start_date.month(), 1);
-        assert_eq!(result.start_date.year(), 2026);
-        assert_eq!(result.end_date.day(), 13);
-        assert_eq!(result.end_date.month(), 1);
-        assert_eq!(result.end_date.year(), 2026);
+        assert_eq!(result.first().day(), 9);
+        assert_eq!(result.first().month(), 1);
+        assert_eq!(result.first().year(), 2026);
+        assert_eq!(result.last().day(), 13);
+        assert_eq!(result.last().month(), 1);
+        assert_eq!(result.last().year(), 2026);
     }
 
     #[test]
     fn test_multiple_dates_diff_month() {
         let result = parse_date("28, 30 novembre, 5, 7, 11, 13 dicembre 2025").unwrap();
-        assert_eq!(result.start_date.day(), 28);
-        assert_eq!(result.start_date.month(), 11);
-        assert_eq!(result.start_date.year(), 2025);
-        assert_eq!(result.end_date.day(), 13);
-        assert_eq!(result.end_date.month(), 12);
-        assert_eq!(result.end_date.year(), 2025);
-    }
-
-    #[test]
-    fn test_date_range_contains() {
-        let range = parse_date("28, 30 novembre, 5, 7, 11, 13 dicembre 2025").unwrap();
-        let test_date = NaiveDate::from_ymd_opt(2025, 11, 28).unwrap();
-        assert!(range.contains(test_date));
-
-        let test_date2 = NaiveDate::from_ymd_opt(2025, 12, 25).unwrap();
-        assert!(!range.contains(test_date2));
-    }
-
-    #[test]
-    fn test_date_range_overlaps() {
-        let range1 = parse_date("28, 30 novembre, 5, 7, 11, 13 dicembre 2025").unwrap();
-        let range2 = parse_date("9, 10, 11, 13 gennaio 2026").unwrap();
-        let range3 = parse_date("19, 20, 21, 26, 27, 28 giugno 2026").unwrap();
-
-        assert!(!range1.overlaps(&range2)); // Not overlapping
-        assert!(!range1.overlaps(&range3)); // Not overlapping
+        assert_eq!(result.first().day(), 28);
+        assert_eq!(result.first().month(), 11);
+        assert_eq!(result.first().year(), 2025);
+        assert_eq!(result.last().day(), 13);
+        assert_eq!(result.last().month(), 12);
+        assert_eq!(result.last().year(), 2025);
     }
 }

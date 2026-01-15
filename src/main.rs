@@ -79,7 +79,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn fetch_events(time_period: &DateRange, args: &Args) -> Vec<Event> {
+async fn fetch_events(date_range: &DateRange, args: &Args) -> Vec<Event> {
     println!("Fetching events...");
     let client = Client::builder()
         .user_agent("Mozilla/5.0 (X11; Linux x86_64; rv:146.0) Gecko/20100101 Firefox/146.0")
@@ -95,18 +95,18 @@ async fn fetch_events(time_period: &DateRange, args: &Args) -> Vec<Event> {
         }),
     );
 
-    let movies = cinemas::fetch(&client, &time_period, &mut cache_manager)
+    let movies = cinemas::fetch(&client, &date_range, &mut cache_manager)
         .await
         .unwrap();
-    let shows = theaters::fetch(&client, &time_period, &mut cache_manager)
+    let shows = theaters::fetch(&client, &date_range, &mut cache_manager)
         .await
         .unwrap();
-    let custom = custom::fetch("custom_events.toml", &time_period).unwrap();
+    let custom = custom::fetch("custom_events.toml", &date_range).unwrap();
 
     return [movies, shows, custom].concat();
 }
 
-fn write_markdown(events: Vec<Event>, time_period: &DateRange, filename: Option<&str>) -> String {
+fn write_markdown(events: Vec<Event>, date_range: &DateRange, filename: Option<&str>) -> String {
     println!("Writing markdown...");
     let mut events_by_category: HashMap<String, Vec<Event>> = HashMap::new();
 
@@ -121,8 +121,8 @@ fn write_markdown(events: Vec<Event>, time_period: &DateRange, filename: Option<
     markdown += "# QUESTA SETTIMANA A TRIESTE\n";
     markdown += &format!(
         "Questa è una lista di buona parte dei film e spettacoli teatrali a Trieste dal {} al {}. Prendeteli come spunto per nuove uscite!\n\n",
-        time_period.start_date.format("%d/%m"),
-        time_period.end_date.format("%d/%m")
+        date_range.start.format("%d/%m"),
+        date_range.end.format("%d/%m")
     );
     markdown += "(La lista è generata automaticamente e potrebbe contenere errori o duplicati.)\n";
     markdown += "\n---\n\n";
@@ -134,6 +134,7 @@ fn write_markdown(events: Vec<Event>, time_period: &DateRange, filename: Option<
 
         for event in events_by_category.get(category).unwrap() {
             markdown += &format!("- {event}\n");
+            println!("{event:#?}");
 
             if let Some(desc) = &event.description {
                 markdown += &format!("  - {desc}\n");
