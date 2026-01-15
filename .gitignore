@@ -2,6 +2,7 @@
 /qsat
 /cache
 /target
+.env
 *.txt
 *.md
 *.html

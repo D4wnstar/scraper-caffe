@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, time::Duration};
 
 use anyhow::Result;
 use chrono::NaiveDate;
@@ -8,6 +8,7 @@ use reqwest::Client;
 use scraper::{Html, Selector};
 
 use crate::{
+    INFERENCE_SERVICE,
     dates::{DateRange, DateSet, TimeFrame},
     events::Event,
     utils::PROGRESS_BAR_TEMPLATE,
@@ -21,7 +22,8 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
     let document = Html::parse_document(&html_body);
 
     let shows_sel = Selector::parse("div.calendar-day").unwrap();
-    let title_sel = Selector::parse("a.calendar-show > p").unwrap();
+    let link_sel = Selector::parse("a.calendar-show").unwrap();
+    let title_sel = Selector::parse("a.calendar-show > p > span.font-bold").unwrap();
 
     let show_count = document.select(&shows_sel).count();
     let progress = ProgressBar::new(show_count as u64)
@@ -30,11 +32,13 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
         .with_finish(ProgressFinish::AndLeave);
 
     for show in document.select(&shows_sel).progress_with(progress) {
+        let link_el = show.select(&link_sel).next();
         let title_el = show.select(&title_sel).next();
-        if let None = title_el {
+        if let None = link_el {
             // Since Miela uses a full calendar, many calendar boxes are empty
             continue;
         }
+
         let title = title_el
             .unwrap()
             .text()
@@ -47,17 +51,30 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
         let date_str = show
             .attr("data-calendar-day")
             .expect("Each calendar day should have a date");
+
         let dates = parse_date(&date_str).expect("Date should be in a standardized format");
 
         // Skip events not in the current week
         if !dates.as_range().overlaps(&date_range) {
             continue;
         }
+        let time_frame = TimeFrame::Dates(dates);
 
         let location = HashSet::from_iter(["Miela".to_string()]);
-        let time_frame = TimeFrame::Dates(dates);
-        let event = Event::new(&title, location, "Teatri").with_time_frame(Some(time_frame));
+
+        let (description, summary) =
+            get_description(client, link_el.unwrap().attr("href").unwrap())
+                .await
+                .unwrap_or((None, None));
+
+        let event = Event::new(&title, location, "Teatri")
+            .with_time_frame(Some(time_frame))
+            .with_description(description)
+            .with_summary(summary);
+
         events.insert(event);
+
+        tokio::time::sleep(Duration::from_millis(20)).await;
     }
 
     Ok(events.into_iter().collect())
@@ -86,6 +103,38 @@ fn parse_date(date_str: &str) -> Option<DateSet> {
 
     // For single dates, create a date range that spans one day
     return Some(DateSet::new(vec![date]).unwrap());
+}
+
+async fn get_description(client: &Client, url: &str) -> Result<(Option<String>, Option<String>)> {
+    let desc_sel = Selector::parse("div.article__body.prose").unwrap();
+
+    let html_body = client.get(url).send().await?.text().await?;
+    let document = Html::parse_document(&html_body);
+    let desc_el = document.select(&desc_sel).next();
+
+    if let None = desc_el {
+        println!("No desc_el");
+        return Ok((None, None));
+    }
+
+    let description = desc_el
+        .unwrap()
+        .text()
+        .fold(String::new(), |acc, t| {
+            format!("{acc} {t}").trim().to_string()
+        })
+        .replace("\n", "");
+
+    let prompt = format!(
+        "Accorcia la seguente descrizione di uno spettacolo o evento teatrale a non più di un paragrafo. Non andare a capo. Rispondi esclusivamente in testo semplice. Non usare markdown.\n\n{description}"
+    );
+    let summary = INFERENCE_SERVICE
+        .infer(&prompt)
+        .await
+        .inspect_err(|err| eprintln!("Failed to generate summary: {err}"))
+        .ok();
+
+    return Ok((Some(description), summary));
 }
 
 #[cfg(test)]

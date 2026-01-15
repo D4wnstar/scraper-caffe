@@ -1,22 +1,33 @@
 mod dates;
 mod events;
-mod summarize;
+mod inference;
 mod utils;
 mod venues;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, env};
 
 use anyhow::Result;
 use chrono::Days;
 use clap::Parser;
 use headless_chrome::LaunchOptions;
+use lazy_static::lazy_static;
 use reqwest::{self, Client};
 
 use crate::{
     dates::DateRange,
     events::Event,
+    inference::InferenceService,
     venues::{CacheManager, cinemas, custom, theaters},
 };
+
+lazy_static! {
+    static ref INFERENCE_SERVICE: InferenceService = InferenceService::new(
+        &env::var("INFERENCE_API_URL").unwrap_or_default(),
+        &env::var("INFERENCE_API_KEY").unwrap_or_default(),
+        &env::var("INFERENCE_MODEL").unwrap_or_default(),
+        Client::new()
+    );
+}
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -57,6 +68,7 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
+    dotenv::dotenv().ok();
 
     let today = chrono::Local::now().date_naive();
     let in_a_week = today.checked_add_days(Days::new(args.days - 1)).unwrap();
@@ -134,9 +146,10 @@ fn write_markdown(events: Vec<Event>, date_range: &DateRange, filename: Option<&
 
         for event in events_by_category.get(category).unwrap() {
             markdown += &format!("- {event}\n");
-            println!("{event:#?}");
 
-            if let Some(desc) = &event.description {
+            if let Some(sum) = &event.summary {
+                markdown += &format!("  - {sum}\n");
+            } else if let Some(desc) = &event.description {
                 markdown += &format!("  - {desc}\n");
             }
         }

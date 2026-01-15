@@ -12,7 +12,7 @@ pub struct Event {
     pub locations: HashSet<String>,
     pub category: String,
     pub description: Option<String>,
-    // pub summary: Option<String>,
+    pub summary: Option<String>,
     pub tags: HashSet<String>,
 }
 
@@ -88,7 +88,7 @@ impl Event {
             locations,
             category: category.to_string(),
             description: None,
-            // summary: None,
+            summary: None,
             tags: HashSet::new(),
         }
     }
@@ -104,12 +104,15 @@ impl Event {
         }
     }
 
-    #[allow(unused)]
     pub fn with_description(self: Self, description: Option<String>) -> Self {
         Self {
             description,
             ..self
         }
+    }
+
+    pub fn with_summary(self: Self, summary: Option<String>) -> Self {
+        Self { summary, ..self }
     }
 
     pub fn with_tags(self: Self, tags: HashSet<String>) -> Self {
