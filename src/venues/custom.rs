@@ -108,14 +108,14 @@ fn parse_date(value: &Value) -> Option<TimeFrame> {
         if date_str.contains('/') {
             // This is a date range
             if let Some((start, end)) = date_str.split_once('/') {
-                let start_date = NaiveDate::parse_from_str(start, "%Y-%m-%d").ok()?;
-                let end_date = NaiveDate::parse_from_str(end, "%Y-%m-%d").ok()?;
+                let start_date = NaiveDate::parse_from_str(start, "%d-%m-%Y").ok()?;
+                let end_date = NaiveDate::parse_from_str(end, "%d-%m-%Y").ok()?;
                 let date_range = DateRange::new(start_date, end_date);
                 return Some(TimeFrame::Period(date_range));
             }
         } else {
             // This is a single date
-            let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d").ok()?;
+            let date = NaiveDate::parse_from_str(date_str, "%d-%m-%Y").ok()?;
             let date_set = DateSet::new(vec![date]).unwrap();
             return Some(TimeFrame::Dates(date_set));
         }
