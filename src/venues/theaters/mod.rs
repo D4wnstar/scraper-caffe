@@ -8,6 +8,8 @@ use reqwest::Client;
 
 use crate::{dates::DateRange, events::Event, venues::CacheManager};
 
+pub(super) const SUMMARY_PROMPT: &str = "Accorcia la seguente descrizione di uno spettacolo o evento teatrale a non più di un paragrafo. Se la descrizione è già un paragrafo o meno, ripetila verbatim. Non andare a capo. Rispondi esclusivamente in testo semplice. Non usare markdown.";
+
 pub async fn fetch(
     client: &Client,
     date_range: &DateRange,
@@ -19,14 +21,17 @@ pub async fn fetch(
             hangarteatri::fetch(client, date_range).await
         })
         .await?;
+
     let miela = cache_manager
         .get_or_fetch("miela", async || miela::fetch(client, date_range).await)
         .await?;
+
     let rossetti = cache_manager
         .get_or_fetch("rossetti", async || {
             rossetti::fetch(client, date_range).await
         })
         .await?;
+
     let verdi = cache_manager
         .get_or_fetch("verdi", async || verdi::fetch(client, date_range).await)
         .await?;

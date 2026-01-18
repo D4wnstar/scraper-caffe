@@ -12,6 +12,7 @@ use crate::{
     dates::{DateRange, DateSet, TimeFrame},
     events::Event,
     utils::PROGRESS_BAR_TEMPLATE,
+    venues::theaters::SUMMARY_PROMPT,
 };
 
 pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>> {
@@ -125,9 +126,7 @@ async fn get_description(client: &Client, url: &str) -> Result<(Option<String>, 
         })
         .replace("\n", "");
 
-    let prompt = format!(
-        "Accorcia la seguente descrizione di uno spettacolo o evento teatrale a non più di un paragrafo. Non andare a capo. Rispondi esclusivamente in testo semplice. Non usare markdown.\n\n{description}"
-    );
+    let prompt = format!("{SUMMARY_PROMPT}\n\n{description}");
     let summary = INFERENCE_SERVICE
         .infer(&prompt)
         .await

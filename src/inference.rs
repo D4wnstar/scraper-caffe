@@ -77,10 +77,8 @@ impl InferenceService {
 
         let completion_response: ChatCompletionResponse = response.json().await?;
 
-        println!("{completion_response:#?}");
-
         if let Some(choice) = completion_response.choices.first() {
-            Ok(choice.message.content.clone())
+            Ok(self.fix_response(&choice.message.content))
         } else {
             bail!("No completion found in API response")
         }
@@ -92,5 +90,9 @@ impl InferenceService {
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {}", self.api_key))
             .json(&request)
+    }
+
+    fn fix_response(&self, text: &str) -> String {
+        return text.replace("*", "").replace("—", ", ");
     }
 }

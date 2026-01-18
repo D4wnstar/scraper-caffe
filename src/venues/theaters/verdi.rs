@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, time::Duration};
 
 use anyhow::Result;
 use chrono::NaiveDate;
@@ -7,9 +7,11 @@ use reqwest::Client;
 use scraper::{Html, Selector};
 
 use crate::{
+    INFERENCE_SERVICE,
     dates::{DateRange, DateSet, TimeFrame, italian_month_to_number},
     events::Event,
     utils::PROGRESS_BAR_TEMPLATE,
+    venues::theaters::SUMMARY_PROMPT,
 };
 
 pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>> {
@@ -20,7 +22,7 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
     let document = Html::parse_document(&html_body);
 
     let shows_sel = Selector::parse("ul.spettacolo-list div.list-text").unwrap();
-    let title_sel = Selector::parse("h2.spettacolo-list-title > a").unwrap();
+    let link_sel = Selector::parse("h2.spettacolo-list-title > a").unwrap();
     let date_sel = Selector::parse("span.spettacolo-list-date > strong").unwrap();
 
     let show_count = document.select(&shows_sel).count();
@@ -30,11 +32,11 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
         .with_finish(ProgressFinish::AndLeave);
 
     for show in document.select(&shows_sel).progress_with(progress) {
-        let title_el = show.select(&title_sel).next();
-        if let None = title_el {
+        let link_el = show.select(&link_sel).next();
+        if let None = link_el {
             continue;
         }
-        let title = title_el.unwrap().text().next().unwrap().to_string();
+        let title = link_el.unwrap().text().next().unwrap().to_string();
 
         let date_el = show.select(&date_sel).next();
         if let None = date_el {
@@ -47,11 +49,23 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
         if !dates.as_range().overlaps(&date_range) {
             continue;
         }
+        let time_frame = TimeFrame::Dates(dates);
 
         let location = HashSet::from_iter(["Verdi".to_string()]);
-        let time_frame = TimeFrame::Dates(dates);
-        let event = Event::new(&title, location, "Teatri").with_time_frame(Some(time_frame));
+
+        let (description, summary) =
+            get_description(client, &link_el.unwrap().attr("href").unwrap())
+                .await
+                .unwrap_or((None, None));
+
+        let event = Event::new(&title, location, "Teatri")
+            .with_time_frame(Some(time_frame))
+            .with_description(description)
+            .with_summary(summary);
+
         events.insert(event);
+
+        tokio::time::sleep(Duration::from_millis(20)).await;
     }
 
     return Ok(events.into_iter().collect());
@@ -178,6 +192,38 @@ fn parse_multiple_dates(date_str: &str) -> Option<DateSet> {
     } else {
         return Some(DateSet::new(dates).unwrap());
     }
+}
+
+async fn get_description(client: &Client, url: &str) -> Result<(Option<String>, Option<String>)> {
+    let desc_sel = Selector::parse("section.mnk-block.spettacolo-block:not([id]) div").unwrap();
+
+    let html_body = client.get(url).send().await?.text().await?;
+    let document = Html::parse_document(&html_body);
+    let desc_els = document.select(&desc_sel);
+
+    if desc_els.clone().count() == 0 {
+        println!("No desc_els");
+        return Ok((None, None));
+    }
+
+    let description = desc_els.fold(String::new(), |acc, el| {
+        let text = el
+            .text()
+            .filter(|t| !t.trim().is_empty())
+            .fold(String::new(), |acc, t| format!("{acc}. {t}"))
+            .trim()
+            .replace("\n", "");
+        format!("{acc}. {text}",)
+    });
+
+    let prompt = format!("{SUMMARY_PROMPT}\n\n{description}");
+    let summary = INFERENCE_SERVICE
+        .infer(&prompt)
+        .await
+        .inspect_err(|err| eprintln!("Failed to generate summary: {err}"))
+        .ok();
+
+    return Ok((Some(description), summary));
 }
 
 #[cfg(test)]
