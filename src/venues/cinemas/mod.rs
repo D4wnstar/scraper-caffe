@@ -55,7 +55,7 @@ pub async fn fetch(
         })
         .await?;
     let the_space = cache_manager
-        .get_or_fetch("the_space", async || the_space::fetch(client).await)
+        .get_or_fetch("the_space", async || the_space::fetch().await)
         .await?;
 
     // Combine identical movies in a single list

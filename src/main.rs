@@ -224,6 +224,7 @@ fn print_to_pdf(html: &str, filename: &str) {
 
     std::fs::write(format!("./qsat/{filename}.pdf"), pdf_bytes).unwrap();
 }
+
 fn fmt_date_set(set: &DateSet) -> String {
     if set.dates().len() == 1 {
         format!("il {}", set.first().format("%d/%m"))
