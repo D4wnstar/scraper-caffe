@@ -11,17 +11,17 @@ use scraper::{Html, Selector};
 
 use crate::{
     dates::DateRange,
-    events::Event,
+    events::{Event, EventVariants},
     utils::PROGRESS_BAR_TEMPLATE,
-    venues::cinemas::{MovieGroup, SPACE_NUKE},
+    venues::cinemas::SPACE_NUKE,
 };
 
-pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<MovieGroup>> {
+pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<EventVariants>> {
     let progress = ProgressBar::new(0)
         .with_style(ProgressStyle::with_template(PROGRESS_BAR_TEMPLATE).unwrap())
         .with_message("Fetching TriesteCinema");
 
-    let mut movie_groups: HashMap<String, MovieGroup> = HashMap::new();
+    let mut movie_groups: HashMap<String, EventVariants> = HashMap::new();
 
     let movie_list_sel = Selector::parse("div.media-body").unwrap();
     let cinema_sel = Selector::parse("h3.media-heading").unwrap();
@@ -57,28 +57,28 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<MovieG
                 let id = super::make_id(&base_title, &tags);
                 let description = get_description(client, href).await?;
 
-                let movie = Event::new(
-                    &title.from_case(Case::Upper).to_case(Case::Title),
-                    HashSet::from_iter([cinema.to_string()]),
-                    "Film",
-                )
-                .with_id(id)
-                .with_tags(tags.clone());
+                let display_title = title.from_case(Case::Upper).to_case(Case::Title);
+                let location = HashSet::from_iter([cinema.to_string()]);
+                let movie = Event::new(&display_title, location, "Film")
+                    .with_id(id)
+                    .with_tags(tags.clone());
 
                 movie_groups
                     .entry(base_title.clone())
                     .and_modify(|group| {
-                        super::add_or_merge_to_group(group, &movie);
+                        group.add_events(vec![movie.clone()]);
                         // triestecinema.it often doesn't have descriptions for
                         // tagged variants, so make sure to give that priority
                         if group.description.is_none() || tags.len() == 0 {
                             group.description = description.clone();
                         }
                     })
-                    .or_insert_with(|| MovieGroup {
-                        title: base_title,
+                    .or_insert_with(|| EventVariants {
+                        id: base_title,
+                        title: display_title,
+                        category: "Film".to_string(),
                         description,
-                        movies: HashSet::from([movie]),
+                        events: vec![movie],
                     });
 
                 progress.inc(1);

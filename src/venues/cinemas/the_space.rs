@@ -9,9 +9,12 @@ use indicatif::{ProgressBar, ProgressFinish, ProgressIterator, ProgressStyle};
 use reqwest::{Client, Response};
 use serde_json::Value;
 
-use crate::{events::Event, utils::PROGRESS_BAR_TEMPLATE, venues::cinemas::MovieGroup};
+use crate::{
+    events::{Event, EventVariants},
+    utils::PROGRESS_BAR_TEMPLATE,
+};
 
-pub async fn fetch(client: &Client) -> Result<Vec<MovieGroup>> {
+pub async fn fetch(client: &Client) -> Result<Vec<EventVariants>> {
     // The Space's website is a Next.js app and contains absolutely zero functional
     // HTML without JavaScript. It does contain a JSON object that contains a bunch of content,
     // but only a few movies Thankfully, the movies are taken from an server API route that
@@ -49,7 +52,7 @@ pub async fn fetch(client: &Client) -> Result<Vec<MovieGroup>> {
         .with_message("Fetching The Space")
         .with_finish(ProgressFinish::AndLeave);
 
-    let mut movie_groups: HashMap<String, MovieGroup> = HashMap::new();
+    let mut movie_groups: HashMap<String, EventVariants> = HashMap::new();
 
     for listing in listings.iter().progress_with(progress) {
         let (title, base_title, _) = super::clean_title(listing["filmTitle"].as_str().unwrap());
@@ -70,25 +73,25 @@ pub async fn fetch(client: &Client) -> Result<Vec<MovieGroup>> {
             };
             let id = super::make_id(&base_title, &tags);
 
-            let movie = Event::new(
-                &title.from_case(Case::Sentence).to_case(Case::Title),
-                HashSet::from_iter(["The Space".to_string()]),
-                "Film",
-            )
-            .with_id(id)
-            .with_tags(tags);
+            let display_title = title.from_case(Case::Sentence).to_case(Case::Title);
+            let location = HashSet::from_iter(["The Space".to_string()]);
+            let movie = Event::new(&display_title, location, "Film")
+                .with_id(id)
+                .with_tags(tags);
 
             movie_groups
                 .entry(base_title.clone())
                 .and_modify(|group| {
-                    super::add_or_merge_to_group(group, &movie);
+                    group.add_events(vec![movie.clone()]);
                     // Prioritize The Space descriptions
                     group.description = Some(description.to_string());
                 })
-                .or_insert_with(|| MovieGroup {
-                    title: base_title.clone(),
+                .or_insert_with(|| EventVariants {
+                    id: base_title.clone(),
+                    title: display_title,
+                    category: "Film".to_string(),
                     description: Some(description.to_string()),
-                    movies: HashSet::from([movie]),
+                    events: vec![movie],
                 });
         }
     }

@@ -8,9 +8,9 @@ use crate::dates::{DateRange, DateSet, TimeFrame};
 pub struct Event {
     pub id: String,
     pub title: String,
-    pub time_frame: Option<TimeFrame>,
-    pub locations: HashSet<String>,
     pub category: String,
+    pub locations: HashSet<String>,
+    pub time_frame: Option<TimeFrame>,
     pub description: Option<String>,
     pub summary: Option<String>,
     pub tags: HashSet<String>,
@@ -149,4 +149,28 @@ fn fmt_date_range(range: &DateRange) -> String {
         range.start.format("%d/%m/%Y"),
         range.end.format("%d/%m/%Y")
     )
+}
+
+/// A set of [Event]s to handle multiple variations of the same event. For instance, a movie
+/// could be screened normally, in original language, in 3D, etc. These are different
+/// events, but all the same movie.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EventVariants {
+    pub id: String,
+    pub title: String,
+    pub category: String,
+    pub description: Option<String>,
+    pub events: Vec<Event>,
+}
+
+impl EventVariants {
+    pub fn add_events(&mut self, events: Vec<Event>) {
+        for event in events {
+            if let Some(index) = self.events.iter().position(|ev| *ev == event) {
+                self.events[index].locations.extend(event.locations);
+            } else {
+                self.events.push(event);
+            }
+        }
+    }
 }

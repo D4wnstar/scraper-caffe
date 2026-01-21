@@ -6,7 +6,11 @@ pub mod verdi;
 use anyhow::Result;
 use reqwest::Client;
 
-use crate::{dates::DateRange, events::Event, venues::CacheManager};
+use crate::{
+    dates::DateRange,
+    events::{Event, EventVariants},
+    venues::CacheManager,
+};
 
 pub(super) const SUMMARY_PROMPT: &str = "Accorcia la seguente descrizione di uno spettacolo o evento teatrale a non più di un paragrafo. Se la descrizione è già un paragrafo o meno, ripetila verbatim. Non andare a capo. Rispondi esclusivamente in testo semplice. Non usare markdown.";
 
@@ -14,7 +18,7 @@ pub async fn fetch(
     client: &Client,
     date_range: &DateRange,
     cache_manager: &mut CacheManager,
-) -> Result<Vec<Event>> {
+) -> Result<Vec<EventVariants>> {
     cache_manager.set_category("theater");
     let hangarteatri = cache_manager
         .get_or_fetch("hangarteatri", async || {
@@ -39,5 +43,16 @@ pub async fn fetch(
     let mut events: Vec<Event> = [hangarteatri, miela, rossetti, verdi].concat();
     events.sort();
 
-    Ok(events)
+    let variants: Vec<EventVariants> = events
+        .into_iter()
+        .map(|event| EventVariants {
+            id: event.title.clone(),
+            title: event.title.clone(),
+            category: event.category.clone(),
+            description: event.description.clone(),
+            events: vec![event],
+        })
+        .collect();
+
+    Ok(variants)
 }

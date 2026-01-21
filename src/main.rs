@@ -4,7 +4,10 @@ mod inference;
 mod utils;
 mod venues;
 
-use std::{collections::HashMap, env};
+use std::{
+    collections::{HashMap, HashSet},
+    env,
+};
 
 use anyhow::Result;
 use chrono::Days;
@@ -15,7 +18,7 @@ use reqwest::{self, Client};
 
 use crate::{
     dates::{DateRange, DateSet, TimeFrame},
-    events::Event,
+    events::{Event, EventVariants},
     inference::InferenceService,
     venues::{CacheManager, cinemas, custom, theaters},
 };
@@ -91,7 +94,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn fetch_events(date_range: &DateRange, args: &Args) -> Vec<Event> {
+async fn fetch_events(date_range: &DateRange, args: &Args) -> Vec<EventVariants> {
     println!("Fetching events...");
     let client = Client::builder()
         .user_agent("Mozilla/5.0 (X11; Linux x86_64; rv:146.0) Gecko/20100101 Firefox/146.0")
@@ -118,15 +121,19 @@ async fn fetch_events(date_range: &DateRange, args: &Args) -> Vec<Event> {
     return [movies, shows, custom].concat();
 }
 
-fn write_markdown(events: Vec<Event>, date_range: &DateRange, filename: Option<&str>) -> String {
+fn write_markdown(
+    variants: Vec<EventVariants>,
+    date_range: &DateRange,
+    filename: Option<&str>,
+) -> String {
     println!("Writing markdown...");
-    let mut events_by_category: HashMap<String, Vec<Event>> = HashMap::new();
+    let mut variants_by_category: HashMap<String, Vec<EventVariants>> = HashMap::new();
 
-    for event in events {
-        events_by_category
-            .entry(event.category.clone())
+    for variant in variants {
+        variants_by_category
+            .entry(variant.category.clone())
             .or_insert_with(Vec::new)
-            .push(event);
+            .push(variant);
     }
 
     let mut markdown = String::new();
@@ -139,49 +146,65 @@ fn write_markdown(events: Vec<Event>, date_range: &DateRange, filename: Option<&
     markdown += "(La lista è generata automaticamente e potrebbe contenere errori o duplicati.)\n";
     markdown += "\n---\n\n";
 
-    let mut categories: Vec<&str> = events_by_category.keys().map(|c| c.as_str()).collect();
+    let mut categories: Vec<&str> = variants_by_category.keys().map(|c| c.as_str()).collect();
     categories.sort();
     for category in categories {
         markdown += &format!("\n## {}\n", category.to_uppercase());
 
-        for event in events_by_category.get(category).unwrap() {
-            markdown += &format!("### {}", event.title);
-            if event.tags.len() > 0 {
-                let tags = event
-                    .tags
+        for variant in variants_by_category.get(category).unwrap() {
+            markdown += &format!("### {}", variant.title);
+
+            // Collect different versions
+            if variant.events.len() > 1 {
+                let tags = variant
+                    .events
+                    .iter()
+                    .fold(HashSet::new(), |acc, ev| {
+                        ev.tags.union(&acc).cloned().collect()
+                    })
                     .iter()
                     .fold(String::new(), |acc, t| format!("{acc}, {t}"))
                     .trim_start_matches(", ")
                     .to_string();
-                markdown += &format!(" ({tags})");
+
+                markdown += &format!(" (anche {tags})",)
             }
+
             markdown += "\n";
 
-            if event.locations.len() > 0 {
-                let mut locs: Vec<String> = event.locations.iter().cloned().collect();
+            if variant.events.iter().any(|ev| ev.locations.len() > 0) {
+                let mut locs: Vec<String> = variant
+                    .events
+                    .iter()
+                    .fold(HashSet::new(), |acc, ev| {
+                        acc.union(&ev.locations).cloned().collect()
+                    })
+                    .into_iter()
+                    .collect();
                 locs.sort();
+
                 let text = locs
                     .iter()
-                    .fold(String::new(), |acc, l| format!("{acc}, {l}"))
+                    .fold(String::new(), |acc, t| format!("{acc}, {t}"))
                     .trim_start_matches(", ")
                     .to_string();
                 markdown += &format!("**Dove**: {text}.");
             }
 
-            if let Some(time_frame) = &event.time_frame {
-                let text = match time_frame {
-                    TimeFrame::Dates(set) => fmt_date_set(set),
-                    TimeFrame::Period(range) => fmt_date_range(range),
-                };
-                markdown += &format!(" **Quando**: {text}.");
-            }
+            // if let Some(time_frame) = &variant.time_frame {
+            //     let date = match time_frame {
+            //         TimeFrame::Dates(set) => fmt_date_set(set),
+            //         TimeFrame::Period(range) => fmt_date_range(range),
+            //     };
+            //     markdown += &format!(" **Quando**: {date}.");
+            // }
 
-            if let Some(sum) = &event.summary {
-                markdown += &format!("\n\n{sum}");
-            } else if let Some(desc) = &event.description {
-                markdown += &format!("\n\n{desc}");
-            }
-            markdown += "\n";
+            // if let Some(sum) = &variant.summary {
+            //     markdown += &format!("\n\n{sum}");
+            // } else if let Some(desc) = &variant.description {
+            //     markdown += &format!("\n\n{desc}");
+            // }
+            markdown += &format!("\n");
         }
         markdown += "\n---\n"
     }
@@ -224,6 +247,7 @@ fn print_to_pdf(html: &str, filename: &str) {
 
     std::fs::write(format!("./qsat/{filename}.pdf"), pdf_bytes).unwrap();
 }
+
 fn fmt_date_set(set: &DateSet) -> String {
     if set.dates().len() == 1 {
         format!("il {}", set.first().format("%d/%m"))

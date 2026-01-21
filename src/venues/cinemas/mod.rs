@@ -7,9 +7,12 @@ use anyhow::Result;
 use fancy_regex::Regex;
 use lazy_static::lazy_static;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
 
-use crate::{dates::DateRange, events::Event, venues::CacheManager};
+use crate::{
+    dates::DateRange,
+    events::{Event, EventVariants},
+    venues::CacheManager,
+};
 
 lazy_static! {
     static ref ORIGINAL_LANG: Regex = Regex::new(r"(?i)In [\w\d ]+ Con S\.+t\.+ Italiani").unwrap();
@@ -20,34 +23,11 @@ lazy_static! {
     static ref SUBTITLE_STRIPPER: Regex = Regex::new(r":\s+.*$").unwrap();
 }
 
-/// A set of movie [Event]s to handle multiple variants of the same movie. For instance,
-/// a movie could be screened normally, in original language, in 3D, etc. These are different
-/// events, but all the same movie.
-#[derive(Debug, Serialize, Deserialize)]
-pub(super) struct MovieGroup {
-    title: String,
-    description: Option<String>,
-    movies: HashSet<Event>,
-}
-
-impl MovieGroup {
-    fn add_movies(&mut self, movies: Vec<Event>) {
-        for movie in movies {
-            if let Some(mut existing) = self.movies.take(&movie) {
-                existing.locations.extend(movie.locations);
-                self.movies.insert(existing);
-            } else {
-                self.movies.insert(movie);
-            }
-        }
-    }
-}
-
 pub async fn fetch(
     client: &Client,
     date_range: &DateRange,
     cache_manager: &mut CacheManager,
-) -> Result<Vec<Event>> {
+) -> Result<Vec<EventVariants>> {
     cache_manager.set_category("cinema");
     let triestecinema = cache_manager
         .get_or_fetch("triestecinema", async || {
@@ -59,42 +39,42 @@ pub async fn fetch(
         .await?;
 
     // Combine identical movies in a single list
-    let mut movie_groups: HashMap<String, MovieGroup> = HashMap::new();
+    let mut movie_variants: HashMap<String, EventVariants> = HashMap::new();
 
-    for groups in [triestecinema, the_space] {
-        for group in groups {
-            movie_groups
-                .entry(group.title.clone())
+    for variants in [triestecinema, the_space] {
+        for variant in variants {
+            movie_variants
+                .entry(variant.title.clone())
                 .and_modify(|ext_group| {
                     // Last existing description wins
-                    if group.description.is_some() {
-                        ext_group.description = group.description.clone();
+                    if variant.description.is_some() {
+                        ext_group.description = variant.description.clone();
                     }
-                    ext_group.add_movies(group.movies.iter().cloned().collect());
+                    ext_group.add_events(variant.events.iter().cloned().collect());
                 })
-                .or_insert(group);
+                .or_insert(variant);
         }
     }
 
-    let mut movies_by_group: Vec<Vec<Event>> = Vec::new();
-    for group in movie_groups.into_values() {
-        // Put base variants before special variants (e.g., 3D)
-        let mut variants: Vec<Event> = group.movies.into_iter().collect();
-        variants.sort_by(|a, b| a.tags.len().cmp(&b.tags.len()));
-        // The last variant inherits the group description
-        // This is because graphically this'll be printed last
-        // and we should end on a group on its description
-        if let Some(var) = variants.last_mut() {
-            var.description = group.description;
-        }
-        movies_by_group.push(variants);
-    }
+    let mut variants: Vec<EventVariants> = movie_variants.into_values().collect();
+    // for group in movie_groups.into_values() {
+    //     // Put base variants before special variants (e.g., 3D)
+    //     let mut variants: Vec<Event> = group.events.into_iter().collect();
+    //     variants.sort_by(|a, b| a.tags.len().cmp(&b.tags.len()));
+    //     // The last variant inherits the group description
+    //     // This is because graphically this'll be printed last
+    //     // and we should end on a group on its description
+    //     if let Some(var) = variants.last_mut() {
+    //         var.description = group.description;
+    //     }
+    //     movies_by_group.push(variants);
+    // }
 
     // Order alphabetically
-    movies_by_group.sort_by_key(|movies| movies[0].title.clone());
+    variants.sort_by_key(|group| group.title.clone());
 
-    let movies: Vec<Event> = movies_by_group.into_iter().flatten().collect();
-    return Ok(movies);
+    // let movies: Vec<Event> = movies_by_group.into_iter().flatten().collect();
+    return Ok(variants);
 }
 
 pub(super) fn clean_title(title: &str) -> (String, String, HashSet<String>) {
@@ -166,13 +146,13 @@ pub(super) fn make_id(base_title: &str, tags: &HashSet<String>) -> String {
     return id;
 }
 
-pub(super) fn add_or_merge_to_group(group: &mut MovieGroup, movie: &Event) {
-    if group.movies.contains(movie) {
-        // Merge location if the variant already exists
-        let mut existing_variant = group.movies.take(movie).unwrap();
-        existing_variant.locations.extend(movie.locations.clone());
-        group.movies.insert(existing_variant);
-    } else {
-        group.movies.insert(movie.clone());
-    };
-}
+// pub(super) fn add_or_merge_to_group(group: &mut EventGroup, movie: &Event) {
+//     if group.events.contains(movie) {
+//         // Merge location if the variant already exists
+//         let mut existing_variant = group.events.take(movie).unwrap();
+//         existing_variant.locations.extend(movie.locations.clone());
+//         group.events.insert(existing_variant);
+//     } else {
+//         group.events.insert(movie.clone());
+//     };
+// }

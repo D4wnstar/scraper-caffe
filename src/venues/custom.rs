@@ -5,10 +5,10 @@ use toml::{Table, Value};
 
 use crate::{
     dates::{DateRange, DateSet, TimeFrame},
-    events::Event,
+    events::{Event, EventVariants},
 };
 
-pub fn fetch(filename: &str, date_range: &DateRange) -> Result<Vec<Event>> {
+pub fn fetch(filename: &str, date_range: &DateRange) -> Result<Vec<EventVariants>> {
     let custom_events = load_custom_events(filename)?;
 
     // Filter custom events for current week
@@ -24,7 +24,18 @@ pub fn fetch(filename: &str, date_range: &DateRange) -> Result<Vec<Event>> {
 
     filtered.sort();
 
-    return Ok(filtered);
+    let variants: Vec<EventVariants> = filtered
+        .into_iter()
+        .map(|event| EventVariants {
+            id: event.title.clone(),
+            title: event.title.clone(),
+            category: event.category.clone(),
+            description: event.description.clone(),
+            events: vec![event],
+        })
+        .collect();
+
+    return Ok(variants);
 }
 
 /// Load custom events from a TOML file
