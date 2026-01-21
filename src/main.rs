@@ -14,7 +14,7 @@ use lazy_static::lazy_static;
 use reqwest::{self, Client};
 
 use crate::{
-    dates::DateRange,
+    dates::{DateRange, DateSet, TimeFrame},
     events::Event,
     inference::InferenceService,
     venues::{CacheManager, cinemas, custom, theaters},
@@ -145,15 +145,47 @@ fn write_markdown(events: Vec<Event>, date_range: &DateRange, filename: Option<&
         markdown += &format!("\n## {}\n", category.to_uppercase());
 
         for event in events_by_category.get(category).unwrap() {
-            markdown += &format!("- {event}\n");
+            markdown += &format!("### {}", event.title);
+            if event.tags.len() > 0 {
+                let tags = event
+                    .tags
+                    .iter()
+                    .fold(String::new(), |acc, t| format!("{acc}, {t}"))
+                    .trim_start_matches(", ")
+                    .to_string();
+                markdown += &format!(" ({tags})");
+            }
+            markdown += "\n";
+
+            if event.locations.len() > 0 {
+                let mut locs: Vec<String> = event.locations.iter().cloned().collect();
+                locs.sort();
+                let text = locs
+                    .iter()
+                    .fold(String::new(), |acc, l| format!("{acc}, {l}"))
+                    .trim_start_matches(", ")
+                    .to_string();
+                markdown += &format!("**Dove**: {text}.");
+            }
+
+            if let Some(time_frame) = &event.time_frame {
+                let text = match time_frame {
+                    TimeFrame::Dates(set) => fmt_date_set(set),
+                    TimeFrame::Period(range) => fmt_date_range(range),
+                };
+                markdown += &format!(" **Quando**: {text}.");
+            }
 
             if let Some(sum) = &event.summary {
-                markdown += &format!("  - {sum}\n");
+                markdown += &format!("\n\n{sum}");
             } else if let Some(desc) = &event.description {
-                markdown += &format!("  - {desc}\n");
+                markdown += &format!("\n\n{desc}");
             }
+            markdown += "\n";
         }
+        markdown += "\n---\n"
     }
+    // markdown = markdown.trim_end_matches(pat)
 
     if let Some(filename) = filename {
         std::fs::write(format!("./qsat/{filename}.md"), &markdown).unwrap();
@@ -191,4 +223,34 @@ fn print_to_pdf(html: &str, filename: &str) {
     let pdf_bytes = tab.print_to_pdf(None).unwrap();
 
     std::fs::write(format!("./qsat/{filename}.pdf"), pdf_bytes).unwrap();
+}
+fn fmt_date_set(set: &DateSet) -> String {
+    if set.dates().len() == 1 {
+        format!("il {}", set.first().format("%d/%m"))
+    } else {
+        let str = set
+            .dates()
+            .iter()
+            .enumerate()
+            .fold("il ".to_string(), |acc, (i, date)| {
+                let str = date.format("%d/%m");
+                if i == set.dates().len() - 1 {
+                    format!("{acc} e {str}")
+                } else if i == set.dates().len() - 2 {
+                    format!("{acc} {str}")
+                } else {
+                    format!("{acc} {str}, ")
+                }
+            });
+
+        format!("{str}")
+    }
+}
+
+fn fmt_date_range(range: &DateRange) -> String {
+    format!(
+        "dal {} al {}",
+        range.start.format("%d/%m/%Y"),
+        range.end.format("%d/%m/%Y")
+    )
 }
