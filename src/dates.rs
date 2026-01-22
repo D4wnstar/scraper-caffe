@@ -21,7 +21,6 @@ impl DateSet {
         }
     }
 
-    #[allow(unused)]
     pub fn dates(&self) -> &Vec<NaiveDate> {
         &self.dates
     }
@@ -51,6 +50,13 @@ impl DateSet {
             end: self.last(),
         }
     }
+
+    pub fn merge(&self, other: &Self) -> Self {
+        let mut new_set = self.clone();
+        new_set.dates.extend(other.dates.clone());
+        new_set.dates.sort();
+        new_set
+    }
 }
 
 /// A period of time represented by a start and an end date.
@@ -74,6 +80,13 @@ impl DateRange {
     pub fn overlaps(&self, other: &DateRange) -> bool {
         self.start <= other.end && self.end >= other.start
     }
+
+    pub fn merge(&self, other: &Self) -> Self {
+        let mut new_range = self.clone();
+        new_range.start = self.start.min(other.start);
+        new_range.end = self.end.max(other.end);
+        new_range
+    }
 }
 
 /// A representation of a time frame, either as a discrete set of dates
@@ -87,8 +100,16 @@ pub enum TimeFrame {
 impl TimeFrame {
     pub fn as_range(&self) -> DateRange {
         match self {
-            TimeFrame::Dates(set) => set.as_range(),
-            TimeFrame::Period(range) => range.clone(),
+            Self::Dates(set) => set.as_range(),
+            Self::Period(range) => range.clone(),
+        }
+    }
+
+    pub fn merge(&self, other: &Self) -> Self {
+        match (self, other) {
+            (Self::Dates(set1), Self::Dates(set2)) => Self::Dates(set1.merge(&set2)),
+            (Self::Period(range1), Self::Period(range2)) => Self::Period(range1.merge(&range2)),
+            _ => todo!(),
         }
     }
 }

@@ -213,12 +213,10 @@ fn print_to_pdf(html: &str, filename: &str) {
         headless_chrome::Browser::new(LaunchOptions::default_builder().path(None).build().unwrap())
             .unwrap();
 
+    let html_uri = format!("data:text/html;charset=utf-8,{}", html);
     let tab = browser.new_tab().unwrap();
-    let tab = tab
-        .navigate_to(&format!("data:text/html;charset=utf-8,{}", html))
-        .unwrap()
-        .wait_until_navigated()
-        .unwrap();
+    tab.navigate_to(&html_uri).unwrap();
+    tab.wait_until_navigated().unwrap();
 
     let pdf_bytes = tab.print_to_pdf(None).unwrap();
 

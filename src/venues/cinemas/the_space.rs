@@ -100,11 +100,10 @@ async fn call_api(url: &str) -> Result<Value> {
             .unwrap();
 
     // Navigate to the proper page to create session cookies
+    let main_page = "https://www.thespacecinema.it/cinema/trieste/al-cinema";
     let tab = browser.new_tab().unwrap();
-    tab.navigate_to("https://www.thespacecinema.it/cinema/trieste/al-cinema")
-        .unwrap()
-        .wait_until_navigated()
-        .unwrap();
+    tab.navigate_to(main_page).unwrap();
+    tab.wait_until_navigated().unwrap();
 
     // Call the API URL
     tab.navigate_to(url).unwrap();

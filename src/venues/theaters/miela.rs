@@ -73,7 +73,15 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
             .with_description(description)
             .with_summary(summary);
 
-        events.insert(event);
+        // Merge time frames if needed
+        if let Some(mut ext_event) = events.take(&event) {
+            let old_tf = ext_event.time_frame.unwrap();
+            let new_tf = old_tf.merge(&event.time_frame.unwrap());
+            ext_event.time_frame = Some(new_tf);
+            events.insert(ext_event);
+        } else {
+            events.insert(event);
+        }
 
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
