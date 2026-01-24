@@ -10,7 +10,7 @@ pub struct DateSet {
 }
 
 impl DateSet {
-    /// Create a new [DateSet].
+    /// Creates a new [DateSet].
     /// # Errors
     /// Returns `None` if the input vector is empty.
     pub fn new(dates: Vec<NaiveDate>) -> Option<Self> {
@@ -18,6 +18,13 @@ impl DateSet {
             None
         } else {
             Some(Self { dates })
+        }
+    }
+
+    /// Creates a new [DateSet] including only today's date.
+    pub fn today() -> Self {
+        Self {
+            dates: vec![chrono::Local::now().date_naive()],
         }
     }
 

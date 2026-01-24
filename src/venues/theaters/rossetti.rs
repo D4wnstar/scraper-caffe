@@ -1,7 +1,7 @@
 use std::{collections::HashSet, time::Duration};
 
 use anyhow::Result;
-use chrono::NaiveDate;
+use chrono::{Datelike, NaiveDate};
 use convert_case::{Case, Casing};
 use indicatif::{ProgressBar, ProgressFinish, ProgressIterator, ProgressStyle};
 use reqwest::Client;
@@ -45,6 +45,8 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
             .from_case(Case::Upper)
             .to_case(Case::Title);
 
+        // The date is selected just to check if the event is in the current week
+        // The real dates in selected in the event's page later
         let date_el = show.select(&date_sel).next();
         if let None = date_el {
             continue;
@@ -54,20 +56,13 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
             .text()
             .skip(1) // First text elem is an empty string (due to the icon probably)
             .next()
-            .expect("Second text element should always be the date")
-            .trim()
-            .to_string();
+            .map(|t| t.trim().to_string())
+            .expect("Second text element should always be the date");
         let dates = parse_date(&date_str).expect("Date should be in a standardized format");
 
-        // FIXME: Rossetti display date ranges on the URL used and the actual shows have
-        // multiple showtimes within that range. However, the dates are shown in the show's
-        // own page. Need to also handle proper dates when description fetching is implemented
-
-        // Skip events not in the current week
         if !dates.as_range().overlaps(&date_range) {
             continue;
         }
-        let time_frame = TimeFrame::Dates(dates);
 
         let location = HashSet::from_iter(["Rossetti".to_string()]);
 
@@ -75,10 +70,11 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
             "https://www.ilrossetti.it{}",
             link_el.unwrap().attr("href").unwrap()
         );
-        let (description, summary) = get_description(client, &show_url)
+        let (description, summary, dates) = get_description_and_dates(client, &show_url)
             .await
-            .unwrap_or((None, None));
+            .unwrap_or((None, None, DateSet::today()));
 
+        let time_frame = TimeFrame::Dates(dates);
         let event = Event::new(&title, location, "Teatri")
             .with_time_frame(Some(time_frame))
             .with_description(description)
@@ -92,7 +88,7 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
     Ok(events.into_iter().collect())
 }
 
-/// Parse a date string from Rossetti data and return a DateRange
+/// Parse a date string from the Rossetti calendar and return a [DateSet]
 ///
 /// This function handles these formats:
 /// - Single dates: "22 Set 2025"
@@ -208,38 +204,66 @@ fn parse_full_date_range(date_str: &str) -> Option<DateSet> {
     return Some(DateSet::new(vec![start_date, end_date]).unwrap());
 }
 
-async fn get_description(client: &Client, url: &str) -> Result<(Option<String>, Option<String>)> {
+async fn get_description_and_dates(
+    client: &Client,
+    url: &str,
+) -> Result<(Option<String>, Option<String>, DateSet)> {
     let desc_paras_sel = Selector::parse("div.section div.u-unknown-content p").unwrap();
+    let dates_sel = Selector::parse("div.recite__date").unwrap();
 
     let html_body = client.get(url).send().await?.text().await?;
     let document = Html::parse_document(&html_body);
     let desc_el = document.select(&desc_paras_sel);
+    let date_els = document.select(&dates_sel);
 
+    let description;
+    let summary;
     if desc_el.clone().count() == 0 {
         println!("No desc_el");
-        return Ok((None, None));
+        description = None;
+        summary = None;
+    } else {
+        let desc = desc_el
+            .filter_map(|el| {
+                if el.child_elements().count() > 0 {
+                    None
+                } else {
+                    Some(el.text().fold(String::new(), |acc, t| format!("{acc} {t}")))
+                }
+            })
+            .fold(String::new(), |acc, t| format!("{acc} {t}"))
+            .trim()
+            .to_string();
+
+        let prompt = format!("{}\n\n{}", SUMMARY_PROMPT, desc);
+
+        description = Some(desc);
+        summary = INFERENCE_SERVICE
+            .infer(&prompt)
+            .await
+            .inspect_err(|err| eprintln!("Failed to generate summary: {err}"))
+            .ok();
     }
 
-    let description = desc_el
-        .filter_map(|el| {
-            if el.child_elements().count() > 0 {
-                None
-            } else {
-                Some(el.text().fold(String::new(), |acc, t| format!("{acc} {t}")))
-            }
-        })
-        .fold(String::new(), |acc, t| format!("{acc} {t}"))
-        .trim()
-        .to_string();
+    let dates;
+    if date_els.clone().count() == 0 {
+        println!("Not dates found");
+        dates = DateSet::today();
+    } else {
+        let naive_dates: Vec<NaiveDate> = date_els
+            .filter_map(|el| el.text().next())
+            .map(|t| {
+                let split: Vec<&str> = t.split_whitespace().collect();
+                let day: u32 = split[1].parse().unwrap();
+                let month = italian_month_to_number(split[2]).unwrap();
+                let year = chrono::Local::now().year();
+                NaiveDate::from_ymd_opt(year, month, day).unwrap()
+            })
+            .collect();
+        dates = DateSet::new(naive_dates).unwrap();
+    }
 
-    let prompt = format!("{SUMMARY_PROMPT}\n\n{description}");
-    let summary = INFERENCE_SERVICE
-        .infer(&prompt)
-        .await
-        .inspect_err(|err| eprintln!("Failed to generate summary: {err}"))
-        .ok();
-
-    return Ok((Some(description), summary));
+    return Ok((description, summary, dates));
 }
 
 #[cfg(test)]
