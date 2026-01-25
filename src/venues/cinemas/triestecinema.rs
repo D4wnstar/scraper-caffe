@@ -59,16 +59,19 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<MovieG
                 let (title, base_title, tags) = super::clean_title(title, Cinema::TriesteCinema);
                 let id = super::make_id(&base_title, &tags);
 
-                // If the same variant already exists, skip
+                // If the same variant already exists, skip fetching description
+                let description;
                 if movie_groups
                     .get(&base_title)
                     .and_then(|e| e.movies.iter().find(|m| m.id == id))
                     .is_some()
                 {
-                    continue;
+                    description = None;
+                } else {
+                    description = get_description(client, href).await?;
+                    // Await to not send too many requests too fast
+                    tokio::time::sleep(Duration::from_millis(20)).await;
                 }
-
-                let description = get_description(client, href).await?;
 
                 let dates = DateSet::new(vec![curr_date]).unwrap();
 
@@ -87,7 +90,8 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<MovieG
                         super::add_or_merge_to_group(group, movie.clone());
                         // triestecinema.it often doesn't have descriptions for
                         // tagged variants, so make sure to give that priority
-                        if group.description.is_none() || tags.len() == 0 {
+                        if description.is_some() && (group.description.is_none() || tags.len() == 0)
+                        {
                             group.description = description.clone();
                         }
                     })
@@ -98,9 +102,6 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<MovieG
                     });
 
                 progress.inc(1);
-
-                // Await to not send too many requests too fast
-                tokio::time::sleep(Duration::from_millis(20)).await;
             }
         }
     }

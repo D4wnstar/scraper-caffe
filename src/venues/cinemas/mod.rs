@@ -35,6 +35,14 @@ impl MovieGroup {
         for movie in movies {
             if let Some(mut existing) = self.movies.take(&movie) {
                 existing.locations.extend(movie.locations);
+
+                if let Some(other_tf) = movie.time_frame {
+                    if let Some(ext_tf) = existing.time_frame {
+                        let new_tf = ext_tf.merge(&other_tf);
+                        existing.time_frame = Some(new_tf);
+                    }
+                }
+
                 self.movies.insert(existing);
             } else {
                 self.movies.insert(movie);
@@ -55,7 +63,7 @@ pub async fn fetch(
         })
         .await?;
     let the_space = cache_manager
-        .get_or_fetch("the_space", async || the_space::fetch().await)
+        .get_or_fetch("the_space", async || the_space::fetch(date_range).await)
         .await?;
 
     // Combine identical movies in a single list

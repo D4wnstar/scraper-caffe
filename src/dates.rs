@@ -1,4 +1,6 @@
-use chrono::NaiveDate;
+use std::{collections::HashSet, iter::Take};
+
+use chrono::{NaiveDate, naive::NaiveDateDaysIterator};
 use serde::{Deserialize, Serialize};
 
 /// A set of dates, such as the days on which as event occurs.
@@ -59,10 +61,13 @@ impl DateSet {
     }
 
     pub fn merge(&self, other: &Self) -> Self {
-        let mut new_set = self.clone();
-        new_set.dates.extend(other.dates.clone());
-        new_set.dates.sort();
-        new_set
+        // Use a hashset to deduplicate, then a vec to sort
+        let mut new_set = HashSet::new();
+        new_set.extend(self.dates.clone());
+        new_set.extend(other.dates.clone());
+        let mut new_vec = Vec::from_iter(new_set);
+        new_vec.sort();
+        DateSet::new(new_vec).unwrap()
     }
 }
 
@@ -93,6 +98,10 @@ impl DateRange {
         new_range.start = self.start.min(other.start);
         new_range.end = self.end.max(other.end);
         new_range
+    }
+
+    pub fn iter_days(&self) -> Take<NaiveDateDaysIterator> {
+        self.start.iter_days().take(self.days_spanned() as usize)
     }
 }
 
