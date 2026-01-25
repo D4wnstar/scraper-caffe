@@ -4,16 +4,17 @@ use std::{
 };
 
 use anyhow::Result;
+use chrono::Days;
 use convert_case::{Case, Casing};
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Client;
 use scraper::{Html, Selector};
 
 use crate::{
-    dates::DateRange,
+    dates::{DateRange, DateSet, TimeFrame},
     events::Event,
     utils::PROGRESS_BAR_TEMPLATE,
-    venues::cinemas::{MovieGroup, SPACE_NUKE},
+    venues::cinemas::{Cinema, MovieGroup, SPACE_NUKE},
 };
 
 pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<MovieGroup>> {
@@ -29,6 +30,8 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<MovieG
 
     // Fetch movies from TriesteCinema for each request day
     for delta in 0..=date_range.days_spanned() {
+        let curr_date = date_range.start.clone() + Days::new(delta as u64);
+
         let cinema_url = format!("https://www.triestecinema.it/index.php?pag=orari&delta={delta}");
         let html_body = client.get(cinema_url).send().await?.text().await?;
         let document = Html::parse_document(&html_body);
@@ -53,9 +56,21 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<MovieG
                 .collect();
 
             for (title, href) in links {
-                let (title, base_title, tags) = super::clean_title(title);
+                let (title, base_title, tags) = super::clean_title(title, Cinema::TriesteCinema);
                 let id = super::make_id(&base_title, &tags);
+
+                // If the same variant already exists, skip
+                if movie_groups
+                    .get(&base_title)
+                    .and_then(|e| e.movies.iter().find(|m| m.id == id))
+                    .is_some()
+                {
+                    continue;
+                }
+
                 let description = get_description(client, href).await?;
+
+                let dates = DateSet::new(vec![curr_date]).unwrap();
 
                 let movie = Event::new(
                     &title.from_case(Case::Upper).to_case(Case::Title),
@@ -63,12 +78,13 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<MovieG
                     "Film",
                 )
                 .with_id(id)
-                .with_tags(tags.clone());
+                .with_tags(tags.clone())
+                .with_time_frame(Some(TimeFrame::Dates(dates)));
 
                 movie_groups
                     .entry(base_title.clone())
                     .and_modify(|group| {
-                        super::add_or_merge_to_group(group, &movie);
+                        super::add_or_merge_to_group(group, movie.clone());
                         // triestecinema.it often doesn't have descriptions for
                         // tagged variants, so make sure to give that priority
                         if group.description.is_none() || tags.len() == 0 {

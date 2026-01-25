@@ -71,7 +71,7 @@ async fn main() -> Result<()> {
     dotenv::dotenv().ok();
 
     let today = chrono::Local::now().date_naive();
-    let in_a_week = today.checked_add_days(Days::new(args.days - 1)).unwrap();
+    let in_a_week = today + Days::new(args.days - 1);
     let current_week = DateRange::new(today, in_a_week);
 
     drop(std::fs::create_dir("qsat"));

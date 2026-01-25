@@ -10,7 +10,11 @@ use indicatif::{ProgressBar, ProgressFinish, ProgressIterator, ProgressStyle};
 use scraper::{Html, Selector};
 use serde_json::Value;
 
-use crate::{events::Event, utils::PROGRESS_BAR_TEMPLATE, venues::cinemas::MovieGroup};
+use crate::{
+    events::Event,
+    utils::PROGRESS_BAR_TEMPLATE,
+    venues::cinemas::{Cinema, MovieGroup},
+};
 
 pub async fn fetch() -> Result<Vec<MovieGroup>> {
     // The Space's website is a Next.js app and contains absolutely zero functional
@@ -48,7 +52,8 @@ pub async fn fetch() -> Result<Vec<MovieGroup>> {
     let mut movie_groups: HashMap<String, MovieGroup> = HashMap::new();
 
     for listing in listings.iter().progress_with(progress) {
-        let (title, base_title, _) = super::clean_title(listing["filmTitle"].as_str().unwrap());
+        let title = listing["filmTitle"].as_str().unwrap();
+        let (title, base_title, _) = super::clean_title(title, Cinema::TheSpace);
         let description = listing["synopsisShort"].as_str().unwrap();
 
         // These contain properties for the showings that we need for tags. However
@@ -77,7 +82,7 @@ pub async fn fetch() -> Result<Vec<MovieGroup>> {
             movie_groups
                 .entry(base_title.clone())
                 .and_modify(|group| {
-                    super::add_or_merge_to_group(group, &movie);
+                    super::add_or_merge_to_group(group, movie.clone());
                     // Prioritize The Space descriptions
                     group.description = Some(description.to_string());
                 })

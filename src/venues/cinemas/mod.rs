@@ -12,8 +12,8 @@ use serde::{Deserialize, Serialize};
 use crate::{dates::DateRange, events::Event, venues::CacheManager};
 
 lazy_static! {
+    static ref UPPERCASE_MATCHER: Regex = Regex::new(r"^[^a-z]+").unwrap();
     static ref ORIGINAL_LANG: Regex = Regex::new(r"(?i)In [\w\d ]+ Con S\.+t\.+ Italiani").unwrap();
-    static ref LEONE: Regex = Regex::new(r"(?i)Leone d'oro.*").unwrap();
     static ref HYPHENS: Regex = Regex::new(r" +\- +").unwrap();
     static ref SPACE_NUKE: Regex = Regex::new(r"(\s){2,}").unwrap();
     static ref PUNCTUATION_NUKE: Regex = Regex::new(r"[.,;:]").unwrap();
@@ -97,20 +97,35 @@ pub async fn fetch(
     return Ok(movies);
 }
 
-pub(super) fn clean_title(title: &str) -> (String, String, HashSet<String>) {
-    // Full title to be displayed
-    let mut new_title = title
+pub(super) enum Cinema {
+    TriesteCinema,
+    TheSpace,
+}
+
+pub(super) fn clean_title(title: &str, cinema: Cinema) -> (String, String, HashSet<String>) {
+    let mut new_title = title.to_string();
+
+    // Annoyances
+    match cinema {
+        Cinema::TriesteCinema => {
+            new_title = new_title.replace("/", "").replace("4K", "");
+            new_title = UPPERCASE_MATCHER
+                .find(&new_title)
+                .ok()
+                .flatten()
+                .map(|m| m.as_str().to_string())
+                .unwrap_or(new_title);
+        }
+        Cinema::TheSpace => {}
+    }
+
+    new_title = new_title
         .to_lowercase()
-        .replace("ultimi giorni", "")
-        .replace(" / ultimo giorno", "")
-        .replace("4k", "")
         .replace("a'", "à")
         .replace("e'", "è")
         .trim()
         .to_string();
 
-    // Annoyances
-    new_title = LEONE.replace_all(&new_title, "").to_string();
     new_title = HYPHENS.replace_all(&new_title, ": ").to_string();
     new_title = SPACE_NUKE.replace_all(&new_title, "$1").to_string();
 
@@ -166,12 +181,19 @@ pub(super) fn make_id(base_title: &str, tags: &HashSet<String>) -> String {
     return id;
 }
 
-pub(super) fn add_or_merge_to_group(group: &mut MovieGroup, movie: &Event) {
-    if group.movies.contains(movie) {
-        // Merge location if the variant already exists
-        let mut existing_variant = group.movies.take(movie).unwrap();
-        existing_variant.locations.extend(movie.locations.clone());
-        group.movies.insert(existing_variant);
+pub(super) fn add_or_merge_to_group(group: &mut MovieGroup, movie: Event) {
+    if let Some(mut ext_movie) = group.movies.take(&movie) {
+        // Merge location and dates if the variant already exists
+        ext_movie.locations.extend(movie.locations.clone());
+
+        if let Some(old_tf) = movie.time_frame {
+            if let Some(ext_tf) = ext_movie.time_frame {
+                let new_tf = ext_tf.merge(&old_tf);
+                ext_movie.time_frame = Some(new_tf);
+            }
+        }
+
+        group.movies.insert(ext_movie);
     } else {
         group.movies.insert(movie.clone());
     };
