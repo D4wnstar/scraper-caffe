@@ -4,7 +4,6 @@ use std::{
 };
 
 use anyhow::Result;
-use chrono::Days;
 use convert_case::{Case, Casing};
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Client;
@@ -29,9 +28,8 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<MovieG
     let title_sel = Selector::parse("a.oggi").unwrap();
 
     // Fetch movies from TriesteCinema for each request day
-    for delta in 0..=date_range.days_spanned() {
-        let curr_date = date_range.start.clone() + Days::new(delta as u64);
-
+    for curr_date in date_range.iter_days() {
+        let delta = (curr_date - date_range.start).num_days();
         let cinema_url = format!("https://www.triestecinema.it/index.php?pag=orari&delta={delta}");
         let html_body = client.get(cinema_url).send().await?.text().await?;
         let document = Html::parse_document(&html_body);

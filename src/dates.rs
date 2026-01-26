@@ -85,7 +85,7 @@ impl DateRange {
 
     /// Returns the distance in days between the first and last dates of the set.
     pub fn days_spanned(&self) -> i64 {
-        (self.end - self.start).num_days()
+        (self.end - self.start).num_days() + 1
     }
 
     /// Checks if this [DateRange] overlaps with another.
@@ -158,5 +158,32 @@ pub fn italian_month_to_number(month_name: &str) -> Option<u32> {
         "dic" => Some(12),
         "dicembre" => Some(12),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_days_spanned_is_end_inclusive() {
+        let start = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+        let end = NaiveDate::from_ymd_opt(2026, 1, 5).unwrap();
+        let range = DateRange::new(start, end);
+
+        assert_eq!(range.days_spanned(), 5);
+    }
+
+    #[test]
+    fn test_iter_days_includes_both_start_and_end() {
+        let start = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+        let end = NaiveDate::from_ymd_opt(2026, 1, 5).unwrap();
+        let range = DateRange::new(start, end);
+
+        let days: Vec<NaiveDate> = range.iter_days().collect();
+
+        assert_eq!(days.len(), 5);
+        assert_eq!(days.first(), Some(&start));
+        assert_eq!(days.last(), Some(&end));
     }
 }
