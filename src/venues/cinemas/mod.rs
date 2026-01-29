@@ -31,22 +31,20 @@ pub(super) struct MovieGroup {
 }
 
 impl MovieGroup {
-    fn add_movies(&mut self, movies: Vec<Event>) {
-        for movie in movies {
-            if let Some(mut existing) = self.movies.take(&movie) {
-                existing.locations.extend(movie.locations);
+    fn add_movie(&mut self, movie: Event) {
+        if let Some(mut ext_movie) = self.movies.take(&movie) {
+            ext_movie.locations.extend(movie.locations);
 
-                if let Some(other_tf) = movie.time_frame {
-                    if let Some(ext_tf) = existing.time_frame {
-                        let new_tf = ext_tf.merge(&other_tf);
-                        existing.time_frame = Some(new_tf);
-                    }
+            if let Some(old_tf) = movie.time_frame {
+                if let Some(ext_tf) = ext_movie.time_frame {
+                    let new_tf = ext_tf.merge(&old_tf);
+                    ext_movie.time_frame = Some(new_tf);
                 }
-
-                self.movies.insert(existing);
-            } else {
-                self.movies.insert(movie);
             }
+
+            self.movies.insert(ext_movie);
+        } else {
+            self.movies.insert(movie);
         }
     }
 }
@@ -74,11 +72,13 @@ pub async fn fetch(
             movie_groups
                 .entry(group.title.clone())
                 .and_modify(|ext_group| {
+                    for movie in group.movies.clone() {
+                        ext_group.add_movie(movie);
+                    }
                     // Last existing description wins
                     if group.description.is_some() {
                         ext_group.description = group.description.clone();
                     }
-                    ext_group.add_movies(group.movies.iter().cloned().collect());
                 })
                 .or_insert(group);
         }
@@ -187,22 +187,4 @@ pub(super) fn make_id(base_title: &str, tags: &HashSet<String>) -> String {
         .to_lowercase();
 
     return id;
-}
-
-pub(super) fn add_or_merge_to_group(group: &mut MovieGroup, movie: Event) {
-    if let Some(mut ext_movie) = group.movies.take(&movie) {
-        // Merge location and dates if the variant already exists
-        ext_movie.locations.extend(movie.locations.clone());
-
-        if let Some(old_tf) = movie.time_frame {
-            if let Some(ext_tf) = ext_movie.time_frame {
-                let new_tf = ext_tf.merge(&old_tf);
-                ext_movie.time_frame = Some(new_tf);
-            }
-        }
-
-        group.movies.insert(ext_movie);
-    } else {
-        group.movies.insert(movie.clone());
-    };
 }

@@ -85,9 +85,9 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<MovieG
                 movie_groups
                     .entry(base_title.clone())
                     .and_modify(|group| {
-                        super::add_or_merge_to_group(group, movie.clone());
+                        group.add_movie(movie.clone());
                         // triestecinema.it often doesn't have descriptions for
-                        // tagged variants, so make sure to give that priority
+                        // tagged variants, so make sure to base variant (no tags) priority
                         if description.is_some() && (group.description.is_none() || tags.len() == 0)
                         {
                             group.description = description.clone();

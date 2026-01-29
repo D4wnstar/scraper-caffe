@@ -92,7 +92,7 @@ pub async fn fetch(date_range: &DateRange) -> Result<Vec<MovieGroup>> {
                 movie_groups
                     .entry(base_title.clone())
                     .and_modify(|group| {
-                        super::add_or_merge_to_group(group, movie.clone());
+                        group.add_movie(movie.clone());
                         // Prioritize The Space descriptions
                         group.description = Some(description.to_string());
                     })
