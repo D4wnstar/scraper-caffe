@@ -15,7 +15,7 @@ use reqwest::{self, Client};
 
 use crate::{
     dates::DateRange,
-    events::Event,
+    events::{Category, Event},
     inference::InferenceService,
     venues::{CacheManager, cinemas, custom, theaters},
 };
@@ -60,9 +60,6 @@ struct Args {
         help = "Individual venues to rebuild, as a space-separate list of snake_case names. Does nothing without --cache"
     )]
     rebuild_venues: Option<String>,
-
-    #[arg(short, long, help = "Save markdown and HTML working files")]
-    save_debug: bool,
 }
 
 #[tokio::main]
@@ -80,26 +77,16 @@ async fn main() -> Result<()> {
         today.format("%d-%m"),
         in_a_week.format("%d-%m")
     );
-    let maybe_filename = args.save_debug.then_some(filename.as_str()).or(None);
 
-    let events = fetch_events(&current_week, &args).await;
-    let mut events_by_category: HashMap<String, Vec<Event>> = HashMap::new();
-
-    for event in events {
-        events_by_category
-            .entry(event.category.clone())
-            .or_insert_with(Vec::new)
-            .push(event);
-    }
-
-    // TODO: Move file saving out of write_html
-    rendering::write_html(events_by_category, &current_week, maybe_filename)?;
+    let categories = fetch_events(&current_week, &args).await;
+    let html = rendering::render_to_html(categories, &current_week)?;
+    std::fs::write(format!("qsat/{filename}.html"), &html)?;
 
     println!("Done!");
     Ok(())
 }
 
-async fn fetch_events(date_range: &DateRange, args: &Args) -> Vec<Event> {
+async fn fetch_events(date_range: &DateRange, args: &Args) -> Vec<Category> {
     println!("Fetching events...");
     let client = Client::builder()
         .user_agent("Mozilla/5.0 (X11; Linux x86_64; rv:146.0) Gecko/20100101 Firefox/146.0")
@@ -115,13 +102,37 @@ async fn fetch_events(date_range: &DateRange, args: &Args) -> Vec<Event> {
         }),
     );
 
-    let movies = cinemas::fetch(&client, &date_range, &mut cache_manager)
-        .await
-        .unwrap();
-    let shows = theaters::fetch(&client, &date_range, &mut cache_manager)
-        .await
-        .unwrap();
-    let custom = custom::fetch("custom_events.toml", &date_range).unwrap();
+    let movies = Category {
+        name: "Film".to_string(),
+        events: cinemas::fetch(&client, &date_range, &mut cache_manager)
+            .await
+            .unwrap(),
+    };
+    let shows = Category {
+        name: "Teatri".to_string(),
+        events: theaters::fetch(&client, &date_range, &mut cache_manager)
+            .await
+            .unwrap(),
+    };
 
-    return [movies, shows, custom].concat();
+    let custom = custom::fetch("custom_events.toml", &date_range).unwrap();
+    let mut events_by_category: HashMap<String, Vec<Event>> = HashMap::new();
+    for event in custom {
+        events_by_category
+            .entry(event.category.clone())
+            .or_insert_with(Vec::new)
+            .push(event);
+    }
+    let custom_categories: Vec<Category> = events_by_category
+        .into_iter()
+        .map(|(n, vec)| Category {
+            name: n,
+            events: vec,
+        })
+        .collect();
+
+    let mut categories = vec![movies, shows];
+    categories.extend(custom_categories);
+    categories.sort_by(|a, b| a.name.cmp(&b.name));
+    return categories;
 }

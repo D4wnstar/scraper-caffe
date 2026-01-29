@@ -1,7 +1,13 @@
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, fmt, hash::Hash};
+use std::{collections::HashSet, hash::Hash};
 
-use crate::dates::{DateRange, DateSet, TimeFrame};
+use crate::dates::TimeFrame;
+
+#[derive(Serialize, Deserialize)]
+pub struct Category {
+    pub name: String,
+    pub events: Vec<Event>,
+}
 
 /// An event somewhere, at some time.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -14,43 +20,6 @@ pub struct Event {
     pub description: Option<String>,
     pub summary: Option<String>,
     pub tags: HashSet<String>,
-}
-
-impl fmt::Display for Event {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let title = format!("**{}**", self.title);
-        let tags = self
-            .tags
-            .iter()
-            .fold(String::new(), |acc, tag| format!("{acc} **[{tag}]**"));
-
-        let date = match &self.time_frame {
-            None => String::new(),
-            Some(time_frame) => {
-                let tf_text = match time_frame {
-                    TimeFrame::Dates(set) => fmt_date_set(set),
-                    TimeFrame::Period(range) => fmt_date_range(range),
-                };
-                format!(", {tf_text}")
-            }
-        };
-
-        let mut locs: Vec<String> = self.locations.iter().cloned().collect();
-        locs.sort();
-        let loc_text = locs
-            .iter()
-            .enumerate()
-            .fold(String::new(), |acc, (i, new)| {
-                if i == 0 {
-                    new.to_string()
-                } else {
-                    format!("{acc}, {new}")
-                }
-            });
-        let locations = format!(" ({})", loc_text);
-
-        write!(f, "{title}{tags}{date}{locations}")
-    }
 }
 
 impl PartialEq for Event {
@@ -118,35 +87,4 @@ impl Event {
     pub fn with_tags(self: Self, tags: HashSet<String>) -> Self {
         Self { tags, ..self }
     }
-}
-
-fn fmt_date_set(set: &DateSet) -> String {
-    if set.dates().len() == 1 {
-        format!("il {}", set.first().format("%d/%m"))
-    } else {
-        let str = set
-            .dates()
-            .iter()
-            .enumerate()
-            .fold("il ".to_string(), |acc, (i, date)| {
-                let str = date.format("%d/%m");
-                if i == set.dates().len() - 1 {
-                    format!("{acc} e {str}")
-                } else if i == set.dates().len() - 2 {
-                    format!("{acc} {str}")
-                } else {
-                    format!("{acc} {str}, ")
-                }
-            });
-
-        format!("{str}")
-    }
-}
-
-fn fmt_date_range(range: &DateRange) -> String {
-    format!(
-        "dal {} al {}",
-        range.start.format("%d/%m/%Y"),
-        range.end.format("%d/%m/%Y")
-    )
 }

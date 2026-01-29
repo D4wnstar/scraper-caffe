@@ -1,12 +1,10 @@
-use std::collections::HashMap;
-
 use anyhow::Result;
 use handlebars::{Context, Handlebars, Helper, HelperDef, HelperResult, Output, RenderContext};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     dates::{DateRange, DateSet, TimeFrame},
-    events::Event,
+    events::{Category, Event},
 };
 
 #[derive(Serialize, Deserialize)]
@@ -14,13 +12,22 @@ struct TemplateData {
     start_date: String,
     end_date: String,
     current_date: String,
-    categories: Vec<Category>,
+    categories: Vec<TemplateCategory>,
 }
 
 #[derive(Serialize, Deserialize)]
-struct Category {
+struct TemplateCategory {
     name: String,
     events: Vec<TemplateEvent>,
+}
+
+impl From<Category> for TemplateCategory {
+    fn from(cat: Category) -> Self {
+        Self {
+            name: cat.name,
+            events: cat.events.into_iter().map(TemplateEvent::from).collect(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -55,32 +62,13 @@ impl From<Event> for TemplateEvent {
     }
 }
 
-pub fn write_html(
-    events_by_category: HashMap<String, Vec<Event>>,
-    date_range: &DateRange,
-    filename: Option<&str>,
-) -> Result<String> {
+pub fn render_to_html(categories: Vec<Category>, date_range: &DateRange) -> Result<String> {
     println!("Converting to HTML...");
-
-    let mut categories: Vec<Category> = vec![];
-    for (category_name, events) in events_by_category.into_iter() {
-        let mut temp_events: Vec<TemplateEvent> =
-            events.into_iter().map(TemplateEvent::from).collect();
-        temp_events.sort_by(|a, b| a.title.cmp(&b.title));
-
-        let category = Category {
-            name: category_name,
-            events: temp_events,
-        };
-        categories.push(category);
-    }
-    categories.sort_by(|a, b| a.name.cmp(&b.name));
-
     let data = TemplateData {
         start_date: date_range.start.format("%d/%m").to_string(),
         end_date: date_range.end.format("%d/%m").to_string(),
         current_date: chrono::Local::now().format("%d/%m/%Y").to_string(),
-        categories,
+        categories: categories.into_iter().map(|c| c.into()).collect(),
     };
 
     let mut handlebars = Handlebars::new();
@@ -89,10 +77,6 @@ pub fn write_html(
     handlebars.register_helper("join", Box::new(Join));
 
     let html = handlebars.render("qsat", &data)?;
-
-    if let Some(filename) = filename {
-        std::fs::write(format!("./qsat/{filename}.html"), &html)?;
-    }
 
     Ok(html)
 }

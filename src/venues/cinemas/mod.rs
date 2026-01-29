@@ -99,7 +99,7 @@ pub async fn fetch(
     }
 
     // Order alphabetically
-    movies_by_group.sort_by_key(|movies| movies[0].title.clone());
+    movies_by_group.sort_by(|a, b| a[0].title.cmp(&b[0].title));
 
     let movies: Vec<Event> = movies_by_group.into_iter().flatten().collect();
     return Ok(movies);
