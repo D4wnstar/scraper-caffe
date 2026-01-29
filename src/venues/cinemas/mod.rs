@@ -12,9 +12,10 @@ use serde::{Deserialize, Serialize};
 use crate::{dates::DateRange, events::Event, venues::CacheManager};
 
 lazy_static! {
-    static ref UPPERCASE_MATCHER: Regex = Regex::new(r"^[^a-z]+").unwrap();
+    static ref UPPERCASE_MATCHER: Regex = Regex::new(r"^[a-z]*([^a-z]+)\b").unwrap();
     static ref ORIGINAL_LANG: Regex = Regex::new(r"(?i)In [\w\d ]+ Con S\.+t\.+ Italiani").unwrap();
-    static ref HYPHENS: Regex = Regex::new(r" +\- +").unwrap();
+    static ref HYPHENS: Regex = Regex::new(r" *\- +").unwrap();
+    static ref PERIODS: Regex = Regex::new(r"(\b| +)\. +").unwrap();
     static ref SPACE_NUKE: Regex = Regex::new(r"(\s){2,}").unwrap();
     static ref PUNCTUATION_NUKE: Regex = Regex::new(r"[.,;:]").unwrap();
     static ref SUBTITLE_STRIPPER: Regex = Regex::new(r":\s+.*$").unwrap();
@@ -115,10 +116,10 @@ pub(super) fn clean_title(title: &str, cinema: Cinema) -> (String, String, HashS
         Cinema::TriesteCinema => {
             new_title = new_title.replace("/", "").replace("4K", "");
             new_title = UPPERCASE_MATCHER
-                .find(&new_title)
+                .captures(&new_title)
                 .ok()
                 .flatten()
-                .map(|m| m.as_str().to_string())
+                .map(|m| m.get(1).unwrap().as_str().to_string())
                 .unwrap_or(new_title);
         }
         Cinema::TheSpace => {}
@@ -132,6 +133,7 @@ pub(super) fn clean_title(title: &str, cinema: Cinema) -> (String, String, HashS
         .to_string();
 
     new_title = HYPHENS.replace_all(&new_title, ": ").to_string();
+    new_title = PERIODS.replace_all(&new_title, ": ").to_string();
     new_title = SPACE_NUKE.replace_all(&new_title, "$1").to_string();
 
     // Possible tags
