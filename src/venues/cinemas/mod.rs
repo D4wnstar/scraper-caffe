@@ -86,19 +86,16 @@ pub async fn fetch(
 
     let mut movies_by_group: Vec<Vec<Event>> = Vec::new();
     for group in movie_groups.into_values() {
-        // Put base variants before special variants (e.g., 3D)
         let mut variants: Vec<Event> = group.movies.into_iter().collect();
-        variants.sort_by(|a, b| a.tags.len().cmp(&b.tags.len()));
-        // The last variant inherits the group description
-        // This is because graphically this'll be printed last
-        // and we should end on a group on its description
-        if let Some(var) = variants.last_mut() {
-            var.description = group.description;
+        for v in variants.iter_mut() {
+            v.description = group.description.clone()
         }
+        // Put base variants before special variants (e.g., 3D)
+        variants.sort_by(|a, b| a.tags.len().cmp(&b.tags.len()));
         movies_by_group.push(variants);
     }
 
-    // Order alphabetically
+    // Order groups alphabetically
     movies_by_group.sort_by(|a, b| a[0].title.cmp(&b[0].title));
 
     let movies: Vec<Event> = movies_by_group.into_iter().flatten().collect();
@@ -153,7 +150,7 @@ pub(super) fn clean_title(title: &str, cinema: Cinema) -> (String, String, HashS
         }
         return search.replace_all(text, "").to_string();
     };
-    new_title = extract_re(&new_title, &ORIGINAL_LANG, "Originale Sottotitolato");
+    new_title = extract_re(&new_title, &ORIGINAL_LANG, "Originale");
 
     // Base title without subtitle
     let base_title = SUBTITLE_STRIPPER.replace_all(&new_title, "");

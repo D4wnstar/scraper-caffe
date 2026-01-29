@@ -20,7 +20,7 @@ use crate::{
 pub async fn fetch(date_range: &DateRange) -> Result<Vec<MovieGroup>> {
     // The Space's website is a Next.js app and contains absolutely zero functional
     // HTML without JavaScript. It does contain a JSON object that contains a bunch of content,
-    // but only a few movies Thankfully, the movies are taken from an server API route that
+    // but only a few movies. Thankfully, the movies are taken from an server API route that
     // returns a nice and convenient list of movies and all their metadata.
 
     let progress = ProgressBar::new(0)
@@ -73,7 +73,7 @@ pub async fn fetch(date_range: &DateRange) -> Result<Vec<MovieGroup>> {
                 let tags = match attr["name"].as_str().unwrap() {
                     "2D" => HashSet::new(),
                     "3D" => HashSet::from(["3D".to_string()]),
-                    "LINGUA ORIGINALE" => HashSet::from(["Originale Sottotitolato".to_string()]),
+                    "LINGUA ORIGINALE" => HashSet::from(["Originale".to_string()]),
                     _ => continue,
                 };
                 let id = super::make_id(&base_title, &tags);

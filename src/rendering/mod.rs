@@ -1,3 +1,5 @@
+mod formatting;
+
 use anyhow::Result;
 use handlebars::{Context, Handlebars, Helper, HelperDef, HelperResult, Output, RenderContext};
 use serde::{Deserialize, Serialize};
@@ -23,9 +25,14 @@ struct TemplateCategory {
 
 impl From<Category> for TemplateCategory {
     fn from(cat: Category) -> Self {
+        let events = match cat.name.as_str() {
+            "Film" => formatting::preprocess_films(cat.events),
+            _ => cat.events.into_iter().map(TemplateEvent::from).collect(),
+        };
+
         Self {
             name: cat.name,
-            events: cat.events.into_iter().map(TemplateEvent::from).collect(),
+            events,
         }
     }
 }
@@ -82,26 +89,13 @@ pub fn render_to_html(categories: Vec<Category>, date_range: &DateRange) -> Resu
 }
 
 fn fmt_date_set(set: &DateSet) -> String {
-    if set.dates().len() == 1 {
-        format!("il {}", set.first().format("%d/%m"))
-    } else {
-        let str = set
-            .dates()
-            .iter()
-            .enumerate()
-            .fold("il ".to_string(), |acc, (i, date)| {
-                let str = date.format("%d/%m");
-                if i == set.dates().len() - 1 {
-                    format!("{acc} e {str}")
-                } else if i == set.dates().len() - 2 {
-                    format!("{acc} {str}")
-                } else {
-                    format!("{acc} {str}, ")
-                }
-            });
+    let parts: Vec<String> = set
+        .dates()
+        .iter()
+        .map(|d| d.format("%d/%m").to_string())
+        .collect();
 
-        format!("{str}")
-    }
+    fmt_date_parts(parts)
 }
 
 fn fmt_date_range(range: &DateRange) -> String {
@@ -110,6 +104,20 @@ fn fmt_date_range(range: &DateRange) -> String {
         range.start.format("%d/%m/%Y"),
         range.end.format("%d/%m/%Y")
     )
+}
+
+/// Helper to format a list of strings into an Italian enumeration (e.g., "il A, B e C")
+fn fmt_date_parts(mut parts: Vec<String>) -> String {
+    if parts.is_empty() {
+        return String::new();
+    }
+    if parts.len() == 1 {
+        return format!("il {}", parts[0]);
+    }
+
+    let last = parts.pop().unwrap();
+    let init = parts.join(", ");
+    format!("il {} e {}", init, last)
 }
 
 struct Uppercase;
