@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::Result;
-use convert_case::{Case, Casing};
+use convert_case::Case;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Client;
 use scraper::{Html, Selector};
@@ -13,7 +13,10 @@ use crate::{
     dates::{DateRange, DateSet, TimeFrame},
     events::Event,
     utils::PROGRESS_BAR_TEMPLATE,
-    venues::cinemas::{Cinema, MovieGroup, SPACE_NUKE},
+    venues::{
+        StandardCasing,
+        cinemas::{Cinema, MovieGroup, SPACE_NUKE},
+    },
 };
 
 pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<MovieGroup>> {
@@ -45,7 +48,7 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<MovieG
                 .select(&cinema_sel)
                 .next()
                 .and_then(|e| e.text().next())
-                .map(|s| s.trim().from_case(Case::Upper).to_case(Case::Title))
+                .map(|s| s.trim().standardize_case(Some(Case::Upper)))
                 .expect("Missing cinema header");
 
             let links: Vec<(&str, &str)> = movie_list
@@ -74,7 +77,7 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<MovieG
                 let dates = DateSet::new(vec![curr_date]).unwrap();
 
                 let movie = Event::new(
-                    &title.from_case(Case::Upper).to_case(Case::Title),
+                    &title.standardize_case(Some(Case::Upper)),
                     HashSet::from_iter([cinema.to_string()]),
                     "Film",
                 )

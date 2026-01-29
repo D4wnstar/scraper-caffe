@@ -2,7 +2,7 @@ use std::{collections::HashSet, time::Duration};
 
 use anyhow::Result;
 use chrono::NaiveDate;
-use convert_case::{Case, Casing};
+use convert_case::Case;
 use indicatif::{ProgressBar, ProgressFinish, ProgressIterator, ProgressStyle};
 use reqwest::Client;
 use scraper::{Html, Selector};
@@ -12,7 +12,7 @@ use crate::{
     dates::{DateRange, DateSet, TimeFrame},
     events::Event,
     utils::PROGRESS_BAR_TEMPLATE,
-    venues::theaters::SUMMARY_PROMPT,
+    venues::{StandardCasing, theaters::SUMMARY_PROMPT},
 };
 
 pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>> {
@@ -41,13 +41,9 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
         }
 
         let title = title_el
-            .unwrap()
-            .text()
-            .next()
-            .expect("Each event card should have text")
-            .trim()
-            .from_case(Case::Upper)
-            .to_case(Case::Title);
+            .and_then(|el| el.text().next())
+            .map(|t| t.trim().standardize_case(Some(Case::Upper)))
+            .expect("Each event card should have text");
 
         let date_str = show
             .attr("data-calendar-day")

@@ -48,18 +48,25 @@ struct Args {
     cache: bool,
 
     #[arg(
-        short = 'R',
+        short,
         long,
-        help = "Forcefully recreate the cache. Does nothing without --cache"
+        help = "Individual venues to skip, as a space-separate list of snake_case names"
     )]
-    rebuild_cache: bool,
+    skip_venues: Option<String>,
 
     #[arg(
         short,
         long,
-        help = "Individual venues to rebuild, as a space-separate list of snake_case names. Does nothing without --cache"
+        help = "Like skip_venues, but to forcefully rebuild the cache for those venues. Does nothing without --cache"
     )]
     rebuild_venues: Option<String>,
+
+    #[arg(
+        short = 'R',
+        long,
+        help = "Forcefully rebuild the entire cache. Does nothing without --cache"
+    )]
+    rebuild_cache: bool,
 }
 
 #[tokio::main]
@@ -78,7 +85,7 @@ async fn main() -> Result<()> {
         in_a_week.format("%d-%m")
     );
 
-    let categories = fetch_events(&current_week, &args).await;
+    let categories = fetch_events(&current_week, args).await;
     let html = rendering::render_to_html(categories, &current_week)?;
     std::fs::write(format!("qsat/{filename}.html"), &html)?;
 
@@ -86,7 +93,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn fetch_events(date_range: &DateRange, args: &Args) -> Vec<Category> {
+async fn fetch_events(date_range: &DateRange, args: Args) -> Vec<Category> {
     println!("Fetching events...");
     let client = Client::builder()
         .user_agent("Mozilla/5.0 (X11; Linux x86_64; rv:146.0) Gecko/20100101 Firefox/146.0")
@@ -97,7 +104,10 @@ async fn fetch_events(date_range: &DateRange, args: &Args) -> Vec<Category> {
         "",
         args.cache,
         args.rebuild_cache,
-        args.rebuild_venues.clone().map_or(vec![], |list| {
+        args.rebuild_venues.map_or_else(Vec::new, |list| {
+            list.split_whitespace().map(|s| s.to_string()).collect()
+        }),
+        args.skip_venues.map_or_else(Vec::new, |list| {
             list.split_whitespace().map(|s| s.to_string()).collect()
         }),
     );

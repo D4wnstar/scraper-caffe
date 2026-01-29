@@ -36,13 +36,16 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
         if let None = link_el {
             continue;
         }
-        let title = link_el.unwrap().text().next().unwrap().to_string();
+        let title = link_el
+            .and_then(|el| el.text().next())
+            .map(|t| t.to_string())
+            .expect("Each link element should have text");
 
         let date_el = show.select(&date_sel).next();
         if let None = date_el {
             continue;
         }
-        let date_str = date_el.unwrap().text().next().unwrap();
+        let date_str = date_el.and_then(|el| el.text().next()).unwrap();
         let dates = parse_date(date_str).expect("Date should be in a standardized format");
 
         // Skip events not in the current week

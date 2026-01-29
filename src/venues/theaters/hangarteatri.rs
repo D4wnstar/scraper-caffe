@@ -2,7 +2,7 @@ use std::{collections::HashSet, time::Duration};
 
 use anyhow::Result;
 use chrono::NaiveDate;
-use convert_case::{Case, Casing};
+use convert_case::Case;
 use indicatif::{ProgressBar, ProgressFinish, ProgressIterator, ProgressStyle};
 use reqwest::Client;
 use scraper::{Html, Selector};
@@ -12,7 +12,7 @@ use crate::{
     dates::{DateRange, DateSet, TimeFrame, italian_month_to_number},
     events::Event,
     utils::PROGRESS_BAR_TEMPLATE,
-    venues::theaters::SUMMARY_PROMPT,
+    venues::{StandardCasing, theaters::SUMMARY_PROMPT},
 };
 
 pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>> {
@@ -40,24 +40,18 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
             continue;
         }
         let title = link_el
-            .unwrap()
-            .text()
-            .next()
-            .expect("Each event card should have text")
-            .trim()
-            .from_case(Case::Title)
-            .to_case(Case::Title);
+            .and_then(|el| el.text().next())
+            .map(|t| t.trim().standardize_case(Some(Case::Title)))
+            .expect("Each event card should have a link with text");
 
         let date_el = show.select(&date_sel).next();
         if let None = date_el {
             continue;
         }
         let date_str = date_el
-            .unwrap()
-            .text()
-            .next()
-            .expect("Each event date should have text")
-            .to_string();
+            .and_then(|el| el.text().next())
+            .map(|t| t.to_string())
+            .expect("Each event date should have text");
 
         // Parse the date from the datetime attribute
         let dates = parse_date(&date_str).expect("Date should be in a standardized format");

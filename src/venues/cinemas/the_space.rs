@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::Result;
-use convert_case::{Case, Casing};
+use convert_case::Case;
 use headless_chrome::{Browser, LaunchOptions};
 use indicatif::{ProgressBar, ProgressStyle};
 use scraper::{Html, Selector};
@@ -14,7 +14,10 @@ use crate::{
     dates::{DateRange, DateSet, TimeFrame},
     events::Event,
     utils::PROGRESS_BAR_TEMPLATE,
-    venues::cinemas::{Cinema, MovieGroup},
+    venues::{
+        StandardCasing,
+        cinemas::{Cinema, MovieGroup},
+    },
 };
 
 pub async fn fetch(date_range: &DateRange) -> Result<Vec<MovieGroup>> {
@@ -81,7 +84,7 @@ pub async fn fetch(date_range: &DateRange) -> Result<Vec<MovieGroup>> {
                 let dates = DateSet::new(vec![day]).unwrap();
 
                 let movie = Event::new(
-                    &title.from_case(Case::Sentence).to_case(Case::Title),
+                    &title.standardize_case(Some(Case::Sentence)),
                     HashSet::from_iter(["The Space".to_string()]),
                     "Film",
                 )

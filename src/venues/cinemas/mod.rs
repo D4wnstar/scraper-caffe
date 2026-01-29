@@ -60,10 +60,13 @@ pub async fn fetch(
         .get_or_fetch("triestecinema", async || {
             triestecinema::fetch(client, date_range).await
         })
-        .await?;
+        .await?
+        .unwrap_or_else(Vec::new);
+
     let the_space = cache_manager
         .get_or_fetch("the_space", async || the_space::fetch(date_range).await)
-        .await?;
+        .await?
+        .unwrap_or_else(Vec::new);
 
     // Combine identical movies in a single list
     let mut movie_groups: HashMap<String, MovieGroup> = HashMap::new();

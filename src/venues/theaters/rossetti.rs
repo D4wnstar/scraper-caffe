@@ -2,7 +2,7 @@ use std::{collections::HashSet, time::Duration};
 
 use anyhow::Result;
 use chrono::{Datelike, NaiveDate};
-use convert_case::{Case, Casing};
+use convert_case::Case;
 use indicatif::{ProgressBar, ProgressFinish, ProgressIterator, ProgressStyle};
 use reqwest::Client;
 use scraper::{Html, Selector};
@@ -12,7 +12,7 @@ use crate::{
     dates::{DateRange, DateSet, TimeFrame, italian_month_to_number},
     events::Event,
     utils::PROGRESS_BAR_TEMPLATE,
-    venues::theaters::SUMMARY_PROMPT,
+    venues::{StandardCasing, theaters::SUMMARY_PROMPT},
 };
 
 pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>> {
@@ -38,12 +38,9 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
             continue;
         }
         let title = link_el
-            .unwrap()
-            .text()
-            .next()
-            .expect("Each event card should have text")
-            .from_case(Case::Upper)
-            .to_case(Case::Title);
+            .and_then(|el| el.text().next())
+            .map(|t| t.trim().standardize_case(Some(Case::Upper)))
+            .expect("Each event card should have text");
 
         // The date is selected just to check if the event is in the current week
         // The real dates in selected in the event's page later
@@ -52,12 +49,11 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
             continue;
         }
         let date_str = date_el
-            .unwrap()
-            .text()
-            .skip(1) // First text elem is an empty string (due to the icon probably)
-            .next()
+            // First text elem is an empty string (due to the icon probably)
+            .and_then(|el| el.text().skip(1).next())
             .map(|t| t.trim().to_string())
             .expect("Second text element should always be the date");
+
         let dates = parse_date(&date_str).expect("Date should be in a standardized format");
 
         if !dates.as_range().overlaps(&date_range) {
@@ -219,7 +215,7 @@ async fn get_description_and_dates(
     let description;
     let summary;
     if desc_el.clone().count() == 0 {
-        println!("No desc_el");
+        eprintln!("No desc_el in {url}");
         description = None;
         summary = None;
     } else {
@@ -241,13 +237,13 @@ async fn get_description_and_dates(
         summary = INFERENCE_SERVICE
             .infer(&prompt)
             .await
-            .inspect_err(|err| eprintln!("Failed to generate summary: {err}"))
+            .inspect_err(|err| eprintln!("Failed to generate summary in {url}: {err}"))
             .ok();
     }
 
     let dates;
     if date_els.clone().count() == 0 {
-        println!("Not dates found");
+        eprintln!("No dates found in {url}");
         dates = DateSet::today();
     } else {
         let naive_dates: Vec<NaiveDate> = date_els
