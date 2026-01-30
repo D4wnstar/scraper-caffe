@@ -30,6 +30,8 @@ impl DateSet {
         }
     }
 
+    /// Returns a reference to the dates in this [DateSet]. Not guaranteed
+    /// to be sorted.
     pub fn dates(&self) -> &Vec<NaiveDate> {
         &self.dates
     }
@@ -60,14 +62,12 @@ impl DateSet {
         }
     }
 
-    pub fn merge(&self, other: &Self) -> Self {
-        // Use a hashset to deduplicate, then a vec to sort
+    pub fn merge(self, other: Self) -> Self {
+        // Use a temporary hashset to deduplicate
         let mut new_set = HashSet::new();
-        new_set.extend(self.dates.clone());
-        new_set.extend(other.dates.clone());
-        let mut new_vec = Vec::from_iter(new_set);
-        new_vec.sort();
-        DateSet::new(new_vec).unwrap()
+        new_set.extend(self.dates);
+        new_set.extend(other.dates);
+        DateSet::new(Vec::from_iter(new_set)).unwrap()
     }
 }
 
@@ -93,11 +93,11 @@ impl DateRange {
         self.start <= other.end && self.end >= other.start
     }
 
-    pub fn merge(&self, other: &Self) -> Self {
-        let mut new_range = self.clone();
-        new_range.start = self.start.min(other.start);
-        new_range.end = self.end.max(other.end);
-        new_range
+    pub fn merge(self, other: Self) -> Self {
+        Self {
+            start: self.start.min(other.start),
+            end: self.end.max(other.end),
+        }
     }
 
     pub fn iter_days(&self) -> Take<NaiveDateDaysIterator> {
@@ -121,10 +121,10 @@ impl TimeFrame {
         }
     }
 
-    pub fn merge(&self, other: &Self) -> Self {
+    pub fn merge(self, other: Self) -> Self {
         match (self, other) {
-            (Self::Dates(set1), Self::Dates(set2)) => Self::Dates(set1.merge(&set2)),
-            (Self::Period(range1), Self::Period(range2)) => Self::Period(range1.merge(&range2)),
+            (Self::Dates(set1), Self::Dates(set2)) => Self::Dates(set1.merge(set2)),
+            (Self::Period(range1), Self::Period(range2)) => Self::Period(range1.merge(range2)),
             _ => todo!(),
         }
     }

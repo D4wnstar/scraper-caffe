@@ -34,9 +34,15 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<MovieG
     for curr_date in date_range.iter_days() {
         let delta = (curr_date - date_range.start).num_days();
         let cinema_url = format!("https://www.triestecinema.it/index.php?pag=orari&delta={delta}");
-        let html_body = client.get(cinema_url).send().await?.text().await?;
-        let document = Html::parse_document(&html_body);
+        let html_body = client
+            .get(cinema_url)
+            .send()
+            .await
+            .inspect_err(|e| println!("GET request failed: {e}"))?
+            .text()
+            .await?;
 
+        let document = Html::parse_document(&html_body);
         let movie_count = document
             .select(&movie_list_sel)
             .fold(0, |acc, list| acc + list.select(&title_sel).count());

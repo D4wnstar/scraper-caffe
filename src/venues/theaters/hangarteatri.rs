@@ -19,9 +19,15 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
     let mut events: HashSet<Event> = HashSet::new();
 
     let url = "https://www.hangarteatri.com/eventi/";
-    let html_body = client.get(url).send().await?.text().await?;
-    let document = Html::parse_document(&html_body);
+    let html_body = client
+        .get(url)
+        .send()
+        .await
+        .inspect_err(|e| println!("GET request failed: {e}"))?
+        .text()
+        .await?;
 
+    let document = Html::parse_document(&html_body);
     let shows_sel =
         Selector::parse("li.tribe-common-g-row.tribe-events-calendar-list__event-row").unwrap();
     let link_sel = Selector::parse("h4.tribe-events-calendar-list__event-title > a").unwrap();

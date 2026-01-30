@@ -66,23 +66,26 @@ pub async fn fetch(date_range: &DateRange) -> Result<Vec<MovieGroup>> {
             let (title, base_title, _) = super::clean_title(title, Cinema::TheSpace);
             let description = listing["synopsisShort"].as_str().unwrap();
 
-            // These contain properties for the showings that we need for tags. However
-            // each listing isn't a single showing, but rather a collection of all showings that are
-            // done in the cinema. As such, each attribute is counted as a separate [Event]
-            // For instance, a movie with 3D and LINGUA ORIGINALE is actually three
-            // events, one in 2D, one in 3D and one in original language
-            let attributes = listing["sessionAttributes"].as_array().unwrap();
-            for attr in attributes {
-                let tags = match attr["name"].as_str().unwrap() {
-                    "2D" => HashSet::new(),
-                    "3D" => HashSet::from(["3D".to_string()]),
-                    "LINGUA ORIGINALE" => HashSet::from(["Originale".to_string()]),
-                    _ => continue,
-                };
+            // To determine the tags, we need to look at the individual movie showings for the day
+            // The showings are put in showingGroups. Each group is a day's worth of movies. Since
+            // we're using the per-day API there's always one and only one. Each group contains the
+            // showings in the sessions array. Each session has attributes that explain what variant
+            // it is. We create a separate event for each distinct variant.
+            let sessions = listing["showingGroups"].as_array().unwrap()[0]["sessions"]
+                .as_array()
+                .unwrap();
+            for session in sessions {
+                let mut tags = HashSet::new();
+                for attr in session["attributes"].as_array().unwrap() {
+                    match attr["name"].as_str().unwrap() {
+                        "3D" => drop(tags.insert("3D".to_string())),
+                        "LINGUA ORIGINALE" => drop(tags.insert("Originale".to_string())),
+                        _ => {}
+                    }
+                }
+
                 let id = super::make_id(&base_title, &tags);
-
                 let dates = DateSet::new(vec![day]).unwrap();
-
                 let movie = Event::new(
                     &title.standardize_case(Some(Case::Sentence)),
                     HashSet::from_iter(["The Space".to_string()]),

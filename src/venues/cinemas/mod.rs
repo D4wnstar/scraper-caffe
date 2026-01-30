@@ -38,7 +38,7 @@ impl MovieGroup {
 
             if let Some(old_tf) = movie.time_frame {
                 if let Some(ext_tf) = ext_movie.time_frame {
-                    let new_tf = ext_tf.merge(&old_tf);
+                    let new_tf = ext_tf.merge(old_tf);
                     ext_movie.time_frame = Some(new_tf);
                 }
             }

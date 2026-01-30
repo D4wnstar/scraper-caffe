@@ -119,6 +119,10 @@ impl StandardCasing for String {
             })
             .to_string();
 
+        // Replace regular quotes with fancy quotes for display typography
+        text = text.replace("'", "’");
+        text = QUOTES_FANCY.replace_all(&text, "“$1”").to_string();
+
         return text;
     }
 }
@@ -131,9 +135,10 @@ impl StandardCasing for str {
 
 lazy_static! {
     static ref PARTICLES: Regex = Regex::new(
-        r"(?i)(?<=.)(?<![.:;] )\b(il|la?|le|gli|una?|ad?|ed?|i|o|di?|in|con|per|tra|fra|si|(?:da|de|su|ne)(?:i|l|ll|lla|lle|gli)?)\b"
+        r"(?i)(?<=.)(?<![.:;] )\b(il|la?|le|gli|una?|ad?|ed?|i|o|di?|in|con|per|tra|fra|si|(?:a|da|de|su|ne)(?:i|l|ll|lla|lle|gli)?)\b"
     )
     .unwrap();
-    static ref APOSTROPHES: Regex = Regex::new(r"(?i)\b(l|d|s|un|(?:da|de|su|ne)ll)'(\w)").unwrap();
-    static ref QUOTES: Regex = Regex::new(r#""\w"#).unwrap();
+    static ref APOSTROPHES: Regex = Regex::new(r"(?i)\b(l|d|s|un|(?:a|da|de|su|ne)ll)(?:'|’)(\w)").unwrap();
+    static ref QUOTES: Regex = Regex::new(r#"("|“|”)\w"#).unwrap();
+    static ref QUOTES_FANCY: Regex = Regex::new(r#""(.*?)""#).unwrap();
 }

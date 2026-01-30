@@ -18,9 +18,15 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
     let mut events: HashSet<Event> = HashSet::new();
 
     let url = "https://www.teatroverdi-trieste.com/it/calendario-spettacoli/";
-    let html_body = client.get(url).send().await?.text().await?;
-    let document = Html::parse_document(&html_body);
+    let html_body = client
+        .get(url)
+        .send()
+        .await
+        .inspect_err(|e| println!("GET request failed: {e}"))?
+        .text()
+        .await?;
 
+    let document = Html::parse_document(&html_body);
     let shows_sel = Selector::parse("ul.spettacolo-list div.list-text").unwrap();
     let link_sel = Selector::parse("h2.spettacolo-list-title > a").unwrap();
     let date_sel = Selector::parse("span.spettacolo-list-date > strong").unwrap();

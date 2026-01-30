@@ -19,9 +19,15 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
     let mut events: HashSet<Event> = HashSet::new();
 
     let url = "https://www.miela.it/calendario/";
-    let html_body = client.get(url).send().await?.text().await?;
-    let document = Html::parse_document(&html_body);
+    let html_body = client
+        .get(url)
+        .send()
+        .await
+        .inspect_err(|e| println!("GET request failed: {e}"))?
+        .text()
+        .await?;
 
+    let document = Html::parse_document(&html_body);
     let shows_sel = Selector::parse("div.calendar-day").unwrap();
     let link_sel = Selector::parse("a.calendar-show").unwrap();
     let title_sel = Selector::parse("a.calendar-show > p > span.font-bold").unwrap();
@@ -72,7 +78,7 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
         // Merge time frames if needed
         if let Some(mut ext_event) = events.take(&event) {
             let old_tf = ext_event.time_frame.unwrap();
-            let new_tf = old_tf.merge(&event.time_frame.unwrap());
+            let new_tf = old_tf.merge(event.time_frame.unwrap());
             ext_event.time_frame = Some(new_tf);
             events.insert(ext_event);
         } else {
