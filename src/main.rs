@@ -17,7 +17,7 @@ use crate::{
     dates::DateRange,
     events::{Category, Event},
     inference::InferenceService,
-    venues::{CacheManager, cinemas, custom, theaters},
+    venues::{CacheManager, cinemas, custom, libraries, theaters},
 };
 
 lazy_static! {
@@ -124,7 +124,15 @@ async fn fetch_events(date_range: &DateRange, args: Args) -> Vec<Category> {
             .await
             .unwrap(),
     };
+    let libraries = Category {
+        name: "Librerie".to_string(),
+        events: libraries::fetch(&client, date_range, &mut cache_manager)
+            .await
+            .unwrap(),
+    };
 
+    // TODO: Merge custom categories with existing ones
+    // e.g. a custom "Film" event should be merged with the category above
     let custom = custom::fetch("custom_events.toml", &date_range).unwrap();
     let mut events_by_category: HashMap<String, Vec<Event>> = HashMap::new();
     for event in custom {
@@ -141,7 +149,7 @@ async fn fetch_events(date_range: &DateRange, args: Args) -> Vec<Category> {
         })
         .collect();
 
-    let mut categories = vec![movies, shows];
+    let mut categories = vec![movies, shows, libraries];
     categories.extend(custom_categories);
     categories.sort_by(|a, b| a.name.cmp(&b.name));
     return categories;

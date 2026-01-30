@@ -1,5 +1,6 @@
 pub mod cinemas;
 pub mod custom;
+pub mod libraries;
 pub mod theaters;
 
 use anyhow::Result;

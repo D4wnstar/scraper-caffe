@@ -4,6 +4,8 @@ use anyhow::{Result, bail};
 use reqwest::{Client, RequestBuilder};
 use serde::{Deserialize, Serialize};
 
+pub(super) const SUMMARY_PROMPT: &str = "Accorcia la seguente descrizione di un evento a non più di un paragrafo. Se la descrizione è già un paragrafo o meno, ripetila verbatim. Non andare a capo. Rispondi esclusivamente in testo semplice. Non usare markdown.";
+
 /// Request body for OpenAI-compatible API
 #[derive(Serialize)]
 struct ChatCompletionRequest {

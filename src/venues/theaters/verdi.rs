@@ -10,8 +10,8 @@ use crate::{
     INFERENCE_SERVICE,
     dates::{DateRange, DateSet, TimeFrame, italian_month_to_number},
     events::Event,
+    inference::SUMMARY_PROMPT,
     utils::PROGRESS_BAR_TEMPLATE,
-    venues::theaters::SUMMARY_PROMPT,
 };
 
 pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>> {

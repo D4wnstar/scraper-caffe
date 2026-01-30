@@ -11,8 +11,9 @@ use crate::{
     INFERENCE_SERVICE,
     dates::{DateRange, DateSet, TimeFrame},
     events::Event,
+    inference::SUMMARY_PROMPT,
     utils::PROGRESS_BAR_TEMPLATE,
-    venues::{StandardCasing, theaters::SUMMARY_PROMPT},
+    venues::StandardCasing,
 };
 
 pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>> {
@@ -91,7 +92,7 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
     Ok(events.into_iter().collect())
 }
 
-/// Parse a date string from Miela data and return a DateRange
+/// Parse a date string from Miela data and return a DateSet
 ///
 /// This function handles the format: "20260109" (YYYYMMDD)
 /// which is stored in the data-calendar-day attribute
