@@ -15,7 +15,7 @@ use crate::{
     events::Event,
     utils::PROGRESS_BAR_TEMPLATE,
     venues::{
-        StandardCasing,
+        CATEGORY_MOVIES, StandardCasing,
         cinemas::{Cinema, MovieGroup},
     },
 };
@@ -89,7 +89,7 @@ pub async fn fetch(date_range: &DateRange) -> Result<Vec<MovieGroup>> {
                 let movie = Event::new(
                     &title.standardize_case(Some(Case::Sentence)),
                     HashSet::from_iter(["The Space".to_string()]),
-                    "Film",
+                    CATEGORY_MOVIES,
                 )
                 .with_id(id)
                 .with_tags(tags)

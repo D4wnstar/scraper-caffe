@@ -6,14 +6,18 @@ pub mod verdi;
 use anyhow::Result;
 use reqwest::Client;
 
-use crate::{dates::DateRange, events::Event, venues::CacheManager};
+use crate::{
+    dates::DateRange,
+    events::Event,
+    venues::{CATEGORY_THEATRES, CacheManager},
+};
 
 pub async fn fetch(
     client: &Client,
     date_range: &DateRange,
     cache_manager: &mut CacheManager,
 ) -> Result<Vec<Event>> {
-    cache_manager.set_category("teatri");
+    cache_manager.set_category(&CATEGORY_THEATRES.to_lowercase());
     let hangarteatri = cache_manager
         .get_or_fetch("hangarteatri", async || {
             hangarteatri::fetch(client, date_range).await

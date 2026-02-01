@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     dates::{DateRange, DateSet, TimeFrame},
     events::{Category, Event},
+    venues::CATEGORY_MOVIES,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -26,7 +27,7 @@ struct TemplateCategory {
 impl From<Category> for TemplateCategory {
     fn from(cat: Category) -> Self {
         let events = match cat.name.as_str() {
-            "Film" => formatting::preprocess_films(cat.events),
+            CATEGORY_MOVIES => formatting::preprocess_films(cat.events),
             _ => cat.events.into_iter().map(TemplateEvent::from).collect(),
         };
 

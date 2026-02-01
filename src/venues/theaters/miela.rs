@@ -13,7 +13,7 @@ use crate::{
     events::Event,
     inference::SUMMARY_PROMPT,
     utils::PROGRESS_BAR_TEMPLATE,
-    venues::StandardCasing,
+    venues::{CATEGORY_THEATRES, StandardCasing},
 };
 
 pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>> {
@@ -71,7 +71,7 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
                 .await
                 .unwrap_or((None, None));
 
-        let event = Event::new(&title, location, "Teatri")
+        let event = Event::new(&title, location, CATEGORY_THEATRES)
             .with_time_frame(Some(time_frame))
             .with_description(description)
             .with_summary(summary);

@@ -17,7 +17,10 @@ use crate::{
     dates::DateRange,
     events::{Category, Event},
     inference::InferenceService,
-    venues::{CacheManager, cinemas, custom, libraries, theaters},
+    venues::{
+        CATEGORY_BOOKSTORES, CATEGORY_MOVIES, CATEGORY_THEATRES, CacheManager, cinemas, custom,
+        libraries, theaters,
+    },
 };
 
 lazy_static! {
@@ -117,17 +120,17 @@ async fn fetch_events(date_range: &DateRange, args: Args) -> Vec<Category> {
     let movies = cinemas::fetch(&client, &date_range, &mut cache_manager)
         .await
         .unwrap();
-    events_by_category.insert("Film".to_string(), movies);
+    events_by_category.insert(CATEGORY_MOVIES.to_string(), movies);
 
     let shows = theaters::fetch(&client, &date_range, &mut cache_manager)
         .await
         .unwrap();
-    events_by_category.insert("Teatri".to_string(), shows);
+    events_by_category.insert(CATEGORY_THEATRES.to_string(), shows);
 
     let libraries = libraries::fetch(&client, date_range, &mut cache_manager)
         .await
         .unwrap();
-    events_by_category.insert("Librerie".to_string(), libraries);
+    events_by_category.insert(CATEGORY_BOOKSTORES.to_string(), libraries);
 
     // Merge custom events with existing categories
     let custom = custom::fetch("custom_events.toml", &date_range).unwrap();

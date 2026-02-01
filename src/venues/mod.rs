@@ -12,6 +12,10 @@ use serde::de::DeserializeOwned;
 use std::fs;
 use std::path::PathBuf;
 
+pub const CATEGORY_MOVIES: &str = "Film";
+pub const CATEGORY_THEATRES: &str = "Teatri";
+pub const CATEGORY_BOOKSTORES: &str = "Librerie";
+
 /// Generic cache manager for venue data
 pub struct CacheManager {
     cache_dir: PathBuf,
