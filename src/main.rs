@@ -112,45 +112,37 @@ async fn fetch_events(date_range: &DateRange, args: Args) -> Vec<Category> {
         }),
     );
 
-    let movies = Category {
-        name: "Film".to_string(),
-        events: cinemas::fetch(&client, &date_range, &mut cache_manager)
-            .await
-            .unwrap(),
-    };
-    let shows = Category {
-        name: "Teatri".to_string(),
-        events: theaters::fetch(&client, &date_range, &mut cache_manager)
-            .await
-            .unwrap(),
-    };
-    let libraries = Category {
-        name: "Librerie".to_string(),
-        events: libraries::fetch(&client, date_range, &mut cache_manager)
-            .await
-            .unwrap(),
-    };
-
-    // TODO: Merge custom categories with existing ones
-    // e.g. a custom "Film" event should be merged with the category above
-    let custom = custom::fetch("custom_events.toml", &date_range).unwrap();
     let mut events_by_category: HashMap<String, Vec<Event>> = HashMap::new();
+
+    let movies = cinemas::fetch(&client, &date_range, &mut cache_manager)
+        .await
+        .unwrap();
+    events_by_category.insert("Film".to_string(), movies);
+
+    let shows = theaters::fetch(&client, &date_range, &mut cache_manager)
+        .await
+        .unwrap();
+    events_by_category.insert("Teatri".to_string(), shows);
+
+    let libraries = libraries::fetch(&client, date_range, &mut cache_manager)
+        .await
+        .unwrap();
+    events_by_category.insert("Librerie".to_string(), libraries);
+
+    // Merge custom events with existing categories
+    let custom = custom::fetch("custom_events.toml", &date_range).unwrap();
     for event in custom {
         events_by_category
             .entry(event.category.clone())
             .or_insert_with(Vec::new)
             .push(event);
     }
-    let custom_categories: Vec<Category> = events_by_category
-        .into_iter()
-        .map(|(n, vec)| Category {
-            name: n,
-            events: vec,
-        })
-        .collect();
 
-    let mut categories = vec![movies, shows, libraries];
-    categories.extend(custom_categories);
+    let mut categories: Vec<Category> = events_by_category
+        .into_iter()
+        .map(|(name, events)| Category { name, events })
+        .collect();
     categories.sort_by(|a, b| a.name.cmp(&b.name));
+
     return categories;
 }

@@ -40,7 +40,7 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
     let event_count = next_events_el.select(&event_sel).count();
     let progress = ProgressBar::new(event_count as u64)
         .with_style(ProgressStyle::with_template(PROGRESS_BAR_TEMPLATE).unwrap())
-        .with_message("Fetching Miela")
+        .with_message("Fetching Lovat")
         .with_finish(ProgressFinish::AndLeave);
 
     for event_el in next_events_el.select(&event_sel).progress_with(progress) {
