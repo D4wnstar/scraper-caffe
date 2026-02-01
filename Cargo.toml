@@ -9,7 +9,6 @@ headless_chrome = { git = "https://github.com/rust-headless-chrome/rust-headless
 ] }
 anyhow = "1.0.100"
 chrono = { version = "0.4.42", features = ["serde"] }
-comrak = "0.49.0"
 convert_case = "0.9.0"
 fancy-regex = "0.17.0"
 reqwest = { version = "0.12.24", features = ["rustls-tls", "json"] }
