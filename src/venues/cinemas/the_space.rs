@@ -12,7 +12,7 @@ use serde_json::Value;
 
 use crate::{
     dates::{DateRange, DateSet, TimeFrame},
-    events::Event,
+    events::{Event, Location},
     utils::PROGRESS_BAR_TEMPLATE,
     venues::{
         CATEGORY_MOVIES, StandardCasing,
@@ -86,9 +86,13 @@ pub async fn fetch(date_range: &DateRange) -> Result<Vec<MovieGroup>> {
 
                 let id = super::make_id(&base_title, &tags);
                 let dates = DateSet::new(vec![day]).unwrap();
+                let location = Location::new(
+                    "The Space",
+                    listing["filmUrl"].as_str().map(|s| s.to_string()),
+                );
                 let movie = Event::new(
                     &title.standardize_case(Some(Case::Sentence)),
-                    HashSet::from_iter(["The Space".to_string()]),
+                    HashSet::from_iter([location]),
                     CATEGORY_MOVIES,
                 )
                 .with_id(id)

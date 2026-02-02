@@ -11,7 +11,7 @@ use scraper::{Html, Selector};
 
 use crate::{
     dates::{DateRange, DateSet, TimeFrame},
-    events::Event,
+    events::{Event, Location},
     utils::PROGRESS_BAR_TEMPLATE,
     venues::{
         CATEGORY_MOVIES, StandardCasing,
@@ -67,6 +67,7 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<MovieG
                 let id = super::make_id(&base_title, &tags);
 
                 // If the same variant already exists, skip fetching description
+                let movie_url = format!("https://www.triestecinema.it/{href}");
                 let description;
                 if movie_groups
                     .get(&base_title)
@@ -75,16 +76,16 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<MovieG
                 {
                     description = None;
                 } else {
-                    description = get_description(client, href).await?;
+                    description = get_description(client, &movie_url).await?;
                     // Await to not send too many requests too fast
                     tokio::time::sleep(Duration::from_millis(20)).await;
                 }
 
                 let dates = DateSet::new(vec![curr_date]).unwrap();
-
+                let location = Location::new(&cinema, Some(movie_url));
                 let movie = Event::new(
                     &title.standardize_case(Some(Case::Upper)),
-                    HashSet::from_iter([cinema.to_string()]),
+                    HashSet::from_iter([location]),
                     CATEGORY_MOVIES,
                 )
                 .with_id(id)
@@ -118,10 +119,9 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<MovieG
     return Ok(movie_groups.into_values().collect());
 }
 
-async fn get_description(client: &Client, href: &str) -> Result<Option<String>> {
+async fn get_description(client: &Client, url: &str) -> Result<Option<String>> {
     let desc_sel = Selector::parse("div.col-md-5.wow.fadeIn").unwrap();
 
-    let url = &format!("https://www.triestecinema.it/{href}");
     let movie_page = client.get(url).send().await?.text().await?;
     let desc_doc = Html::parse_document(&movie_page);
     let description_el = desc_doc.select(&desc_sel).skip(1).next().unwrap();

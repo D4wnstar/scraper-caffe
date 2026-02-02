@@ -15,7 +15,7 @@ pub struct Event {
     pub id: String,
     pub title: String,
     pub time_frame: Option<TimeFrame>,
-    pub locations: HashSet<String>,
+    pub locations: HashSet<Location>,
     pub category: String,
     pub description: Option<String>,
     pub summary: Option<String>,
@@ -49,7 +49,7 @@ impl Hash for Event {
 }
 
 impl Event {
-    pub fn new(title: &str, locations: HashSet<String>, category: &str) -> Self {
+    pub fn new(title: &str, locations: HashSet<Location>, category: &str) -> Self {
         Self {
             id: title.to_string(),
             title: title.to_string(),
@@ -86,5 +86,36 @@ impl Event {
 
     pub fn with_tags(self: Self, tags: HashSet<String>) -> Self {
         Self { tags, ..self }
+    }
+}
+
+/// A location for an event, possibly with a URL to a website with info
+/// about the event at that location.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Location {
+    pub name: String,
+    pub url: Option<String>,
+}
+
+impl PartialEq for Location {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl Eq for Location {}
+
+impl Hash for Location {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+    }
+}
+
+impl Location {
+    pub fn new(name: &str, url: Option<String>) -> Self {
+        Self {
+            name: name.to_string(),
+            url,
+        }
     }
 }

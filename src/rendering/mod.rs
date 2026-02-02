@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     dates::{DateRange, DateSet, TimeFrame},
-    events::{Category, Event},
+    events::{Category, Event, Location},
     venues::CATEGORY_MOVIES,
 };
 
@@ -42,7 +42,7 @@ impl From<Category> for TemplateCategory {
 struct TemplateEvent {
     pub title: String,
     pub tags: Vec<String>,
-    pub locations: Vec<String>,
+    pub locations: Vec<Location>,
     pub time_frame: Option<String>,
     pub summary: Option<String>,
     pub description: Option<String>,
@@ -52,8 +52,8 @@ impl From<Event> for TemplateEvent {
     fn from(value: Event) -> Self {
         let mut tags: Vec<String> = value.tags.into_iter().collect();
         tags.sort();
-        let mut locations: Vec<String> = value.locations.into_iter().collect();
-        locations.sort();
+        let mut locations: Vec<Location> = value.locations.into_iter().collect();
+        locations.sort_by(|a, b| a.name.cmp(&b.name));
         let time_frame = value.time_frame.map(|tf| match tf {
             TimeFrame::Dates(set) => fmt_date_set(&set),
             TimeFrame::Period(range) => fmt_date_range(&range),

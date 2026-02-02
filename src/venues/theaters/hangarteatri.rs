@@ -10,7 +10,7 @@ use scraper::{Html, Selector};
 use crate::{
     INFERENCE_SERVICE,
     dates::{DateRange, DateSet, TimeFrame, italian_month_to_number},
-    events::Event,
+    events::{Event, Location},
     inference::SUMMARY_PROMPT,
     utils::PROGRESS_BAR_TEMPLATE,
     venues::{CATEGORY_THEATRES, StandardCasing},
@@ -43,40 +43,35 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
 
     for show in document.select(&shows_sel).progress_with(progress) {
         let link_el = show.select(&link_sel).next();
-        if let None = link_el {
-            continue;
-        }
-        let title = link_el
-            .and_then(|el| el.text().next())
-            .map(|t| t.trim().standardize_case(Some(Case::Title)))
-            .expect("Each event card should have a link with text");
-
         let date_el = show.select(&date_sel).next();
-        if let None = date_el {
+        if link_el.is_none() || date_el.is_none() {
             continue;
         }
+
         let date_str = date_el
             .and_then(|el| el.text().next())
             .map(|t| t.to_string())
             .expect("Each event date should have text");
-
-        // Parse the date from the datetime attribute
         let dates = parse_date(&date_str).expect("Date should be in a standardized format");
-
         // Skip events not in the current week
         if !dates.as_range().overlaps(&date_range) {
             continue;
         }
         let time_frame = TimeFrame::Dates(dates);
 
-        let location = HashSet::from_iter(["Hangar Teatri".to_string()]);
+        let title = link_el
+            .and_then(|el| el.text().next())
+            .map(|t| t.trim().standardize_case(Some(Case::Title)))
+            .expect("Each event card should have a link with text");
+        let event_url = link_el.unwrap().attr("href").unwrap();
+        let location = Location::new("Hangar Teatri", Some(event_url.to_string()));
+        let locations = HashSet::from_iter([location]);
 
-        let (description, summary) =
-            get_description(client, link_el.unwrap().attr("href").unwrap())
-                .await
-                .unwrap_or((None, None));
+        let (description, summary) = get_description(client, event_url)
+            .await
+            .unwrap_or((None, None));
 
-        let event = Event::new(&title, location, CATEGORY_THEATRES)
+        let event = Event::new(&title, locations, CATEGORY_THEATRES)
             .with_time_frame(Some(time_frame))
             .with_description(description)
             .with_summary(summary);

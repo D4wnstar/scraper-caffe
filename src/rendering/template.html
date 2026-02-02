@@ -1,211 +1,223 @@
 <!doctype html>
 <html>
-    <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Questa Settimana a Trieste</title>
-        <style>
-            /* A4 paper size and print optimization */
-            @page {
-                size: A4;
-            }
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>Questa Settimana a Trieste</title>
+    <style>
+      /* A4 paper size and print optimization */
+      @page {
+        size: A4;
+      }
 
-            body {
-                font-family: "Georgia", "Times New Roman", serif;
-                line-height: 1.2;
-                color: #291e16;
-                background: #f0e0d6;
-                max-width: 210mm;
-                margin: 0 auto;
-            }
+      body {
+        font-family: "Georgia", "Times New Roman", serif;
+        line-height: 1.2;
+        color: #291e16;
+        background: #f0e0d6;
+        max-width: 210mm;
+        margin: 0 auto;
+      }
 
-            /* Cover elements */
-            .cover {
-                height: calc(100vh - 1px);
-                display: flex;
-                align-items: center;
-            }
+      /* Cover elements */
+      .cover {
+        height: calc(100vh - 1px);
+        display: flex;
+        align-items: center;
+      }
 
-            .header {
-                width: 100%;
-                background: #291e16;
-                color: #f0e0d6;
-                text-align: center;
-                padding: 1.5cm 1cm;
-                border-top: 3mm solid #d9ac84;
-                border-bottom: 3mm solid #d9ac84;
-            }
+      .header {
+        width: 100%;
+        background: #291e16;
+        color: #f0e0d6;
+        text-align: center;
+        padding: 1.5cm 1cm;
+        border-top: 3mm solid #d9ac84;
+        border-bottom: 3mm solid #d9ac84;
+      }
 
-            .title {
-                font-size: 2.5em;
-                margin: 0 0 0.3em;
-                letter-spacing: 1px;
-            }
+      .title {
+        font-size: 2.5em;
+        margin: 0 0 0.3em;
+        letter-spacing: 1px;
+      }
 
-            .subtitle {
-                font-size: 1.4em;
-                font-style: italic;
-                font-weight: normal;
-            }
+      .subtitle {
+        font-size: 1.4em;
+        font-style: italic;
+        font-weight: normal;
+      }
 
-            .disclaimer {
-                font-size: 0.85em;
-                opacity: 0.5;
-                color: #d9c1b4;
-            }
+      .disclaimer {
+        font-size: 0.85em;
+        opacity: 0.5;
+        color: #d9c1b4;
+      }
 
-            /* Category sections */
-            .category {
-                padding-top: 2em;
-            }
+      /* Category sections */
+      .category {
+        padding-top: 2em;
+      }
 
-            .category-header {
-                background: #291e16;
-                border-left: 0.5em solid #702f3e;
-                /* border-top: 1mm solid #702f3e;
+      .category-header {
+        background: #291e16;
+        border-left: 0.5em solid #702f3e;
+        /* border-top: 1mm solid #702f3e;
                 border-bottom: 1mm solid #702f3e; */
-                color: #f0e0d6;
-                width: 250px;
-                padding: 0.5em 1em;
-                margin: 0em 0em 1em calc(1em + 3px);
-                border-radius: 3px;
-                font-size: 1.8em;
-                overflow: hidden;
-            }
+        color: #f0e0d6;
+        width: 250px;
+        padding: 0.5em 1em;
+        margin: 0em 0em 1em calc(1em + 3px);
+        border-radius: 3px;
+        font-size: 1.8em;
+        overflow: hidden;
+      }
 
-            /* Individual events */
-            .event {
-                background: white;
-                border: 1px solid #d9c1b4;
-                border-radius: 3px;
-                margin: 1em 2em 0em;
-                padding: 1em;
-            }
+      /* Individual events */
+      .event {
+        background: white;
+        border: 1px solid #d9c1b4;
+        border-radius: 3px;
+        margin: 1em 2em 0em;
+        padding: 1em;
+      }
 
-            .event-title {
-                color: #291e16;
-                margin: 0 0 0.5em;
-                font-size: 1.3em;
-                line-height: 1.3;
-                border-bottom: 1px dashed #d9ac84;
-                padding-bottom: 0.3em;
-            }
+      .event-title {
+        color: #291e16;
+        margin: 0 0 0.5em;
+        font-size: 1.3em;
+        line-height: 1.3;
+        border-bottom: 1px dashed #d9ac84;
+        padding-bottom: 0.3em;
+      }
 
-            .tags {
-                display: inline-block;
-                color: #8c593b;
-                margin-left: 0.5em;
-            }
+      .tags {
+        display: inline-block;
+        color: #8c593b;
+        margin-left: 0.5em;
+      }
 
-            .meta {
-                font-size: 0.95em;
-                color: #403531;
-                margin-bottom: 1em;
-                display: flex;
-                flex-wrap: wrap;
-                gap: 2em;
-            }
+      .meta {
+        font-size: 0.95em;
+        color: #403531;
+        margin-bottom: 1em;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2em;
+      }
 
-            .meta-label {
-                font-weight: bold;
-                color: #702f3e;
-            }
+      .meta-label {
+        font-weight: bold;
+        color: #702f3e;
+      }
 
-            .locations {
-                color: #473c36;
-            }
+      .locations {
+        color: #473c36;
+      }
 
-            .description {
-                color: #403531;
-                line-height: 1.6;
-                font-size: 0.95em;
-                text-align: justify;
-                hyphens: auto;
-            }
+      .loc-link {
+        color: #702f3e;
+      }
 
-            /* Footer */
-            .footer {
-                text-align: center;
-                font-size: 0.8em;
-                color: #8c593b;
-                margin: 2em 2em 0em;
-                padding-top: 1em;
-                border-top: 1px solid #d9c1b4;
-            }
+      .description {
+        color: #403531;
+        line-height: 1.6;
+        font-size: 0.95em;
+        text-align: justify;
+        hyphens: auto;
+      }
 
-            /* Print-specific adjustments */
-            @media print {
-                /* Ensure proper page breaks */
-                .category {
-                    break-inside: avoid;
-                }
+      /* Footer */
+      .footer {
+        text-align: center;
+        font-size: 0.8em;
+        color: #8c593b;
+        margin: 2em 2em 0em;
+        padding-top: 1em;
+        border-top: 1px solid #d9c1b4;
+      }
 
-                .event {
-                    break-inside: avoid;
-                }
-            }
-        </style>
-    </head>
-    <body>
-        <div class="cover">
-            <div class="header">
-                <h1 class="title">QUESTA SETTIMANA A TRIESTE</h1>
-                <h2 class="subtitle">{{start_date}} — {{end_date}}</h2>
-                <p>Una comoda lista di eventi a Trieste questa settimana.</p>
-                <p class="disclaimer">
-                    Lista generata automaticamente: potrebbe contenere errori o
-                    duplicati.
-                </p>
+      /* Print-specific adjustments */
+      @media print {
+        /* Ensure proper page breaks */
+        .category {
+          break-inside: avoid;
+        }
+
+        .event {
+          break-inside: avoid;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="cover">
+      <div class="header">
+        <h1 class="title">QUESTA SETTIMANA A TRIESTE</h1>
+        <h2 class="subtitle">{{start_date}} — {{end_date}}</h2>
+        <p>
+          Una comoda lista di eventi a Trieste questa settimana. Dal Caffè degli
+          Incroci con ♥
+        </p>
+        <p class="disclaimer">
+          Lista generata automaticamente: potrebbe contenere errori o duplicati.
+        </p>
+      </div>
+    </div>
+
+    <div class="content">
+      {{#each categories}}
+      <section class="category">
+        <h2 class="category-header">{{uppercase this.name}}</h2>
+
+        {{#each this.events}}
+        <article class="event">
+          <h3 class="event-title">
+            {{this.title}} {{#if this.tags}}
+            <span class="tags">(anche {{join this.tags ", "}})</span>
+            {{/if}}
+          </h3>
+
+          <div class="meta">
+            {{#if this.locations}}
+            <div class="meta-item">
+              <span class="meta-label">Dove:</span>
+              <span class="locations">
+                {{#each this.locations}}{{#if this.url}}
+                <a
+                  href="{{this.url}}"
+                  class="loc-link"
+                  >{{this.name}}</a
+                >
+                {{else}}
+                <span>{{this.name}}</span>
+                {{/if}}{{#unless @last}}, {{/unless}}{{/each}}
+              </span>
             </div>
-        </div>
+            {{/if}} {{#if this.time_frame}}
+            <div class="meta-item">
+              <span class="meta-label">Quando:</span>
+              <span class="time">{{this.time_frame}}</span>
+            </div>
+            {{/if}}
+          </div>
 
-        <div class="content">
-            {{#each categories}}
-            <section class="category">
-                <h2 class="category-header">{{uppercase this.name}}</h2>
+          {{#if this.summary}}
+          <div class="description">{{this.summary}}</div>
+          {{else if this.description}}
+          <div class="description">{{this.description}}</div>
+          {{/if}}
+        </article>
+        {{/each}}
+      </section>
+      {{/each}}
+    </div>
 
-                {{#each this.events}}
-                <article class="event">
-                    <h3 class="event-title">
-                        {{this.title}} {{#if this.tags}}
-                        <span class="tags"
-                            >(anche {{join this.tags ", "}})</span
-                        >
-                        {{/if}}
-                    </h3>
-
-                    <div class="meta">
-                        {{#if this.locations}}
-                        <div class="meta-item">
-                            <span class="meta-label">Dove:</span>
-                            <span class="locations"
-                                >{{join this.locations ", "}}</span
-                            >
-                        </div>
-                        {{/if}} {{#if this.time_frame}}
-                        <div class="meta-item">
-                            <span class="meta-label">Quando:</span>
-                            <span class="time">{{this.time_frame}}</span>
-                        </div>
-                        {{/if}}
-                    </div>
-
-                    {{#if this.summary}}
-                    <div class="description">{{this.summary}}</div>
-                    {{else if this.description}}
-                    <div class="description">{{this.description}}</div>
-                    {{/if}}
-                </article>
-                {{/each}}
-            </section>
-            {{/each}}
-        </div>
-
-        <div class="footer">
-            <p>
-                Generato il {{current_date}} · Caffè degli Incroci ·
-                @caffe.degli.incroci
-            </p>
-        </div>
-    </body>
+    <div class="footer">
+      <p>Generato il {{current_date}} · @caffe.degli.incroci</p>
+    </div>
+  </body>
 </html>

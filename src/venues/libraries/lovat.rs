@@ -10,7 +10,7 @@ use scraper::{Html, Selector};
 use crate::{
     INFERENCE_SERVICE,
     dates::{DateRange, DateSet, TimeFrame},
-    events::Event,
+    events::{Event, Location},
     inference::SUMMARY_PROMPT,
     utils::PROGRESS_BAR_TEMPLATE,
     venues::{CATEGORY_BOOKSTORES, StandardCasing},
@@ -64,7 +64,10 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
             .next()
             .map(|t| t.trim().standardize_case(Some(Case::Title)))
             .expect("Each event link should have a title");
-        let location = HashSet::from_iter(["Lovat".to_string()]);
+        let href = link_el.attr("href").unwrap();
+        let event_url = format!("https://www.librerielovat.com{href}");
+        let location = Location::new("Lovat", Some(event_url.clone()));
+        let locations = HashSet::from_iter([location]);
         let date = event_el
             .select(&date_sel)
             .next()
@@ -75,13 +78,11 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
             continue;
         }
         let time_frame = TimeFrame::Dates(date);
-        let href = link_el.attr("href").unwrap();
-        let event_url = format!("https://www.librerielovat.com{href}");
         let (description, summary) = get_description(client, &event_url, &title)
             .await
             .unwrap_or((None, None));
 
-        let event = Event::new(&title, location, CATEGORY_BOOKSTORES)
+        let event = Event::new(&title, locations, CATEGORY_BOOKSTORES)
             .with_time_frame(Some(time_frame))
             .with_description(description)
             .with_summary(summary);

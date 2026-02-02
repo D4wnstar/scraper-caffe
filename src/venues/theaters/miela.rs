@@ -10,7 +10,7 @@ use scraper::{Html, Selector};
 use crate::{
     INFERENCE_SERVICE,
     dates::{DateRange, DateSet, TimeFrame},
-    events::Event,
+    events::{Event, Location},
     inference::SUMMARY_PROMPT,
     utils::PROGRESS_BAR_TEMPLATE,
     venues::{CATEGORY_THEATRES, StandardCasing},
@@ -42,36 +42,34 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
     for show in document.select(&shows_sel).progress_with(progress) {
         let link_el = show.select(&link_sel).next();
         let title_el = show.select(&title_sel).next();
-        if let None = link_el {
-            // Since Miela uses a full calendar, many calendar boxes are empty
+        if link_el.is_none() {
             continue;
         }
-
-        let title = title_el
-            .and_then(|el| el.text().next())
-            .map(|t| t.trim().standardize_case(Some(Case::Upper)))
-            .expect("Each event card should have text");
 
         let date_str = show
             .attr("data-calendar-day")
             .expect("Each calendar day should have a date");
-
         let dates = parse_date(&date_str).expect("Date should be in a standardized format");
-
         // Skip events not in the current week
         if !dates.as_range().overlaps(&date_range) {
             continue;
         }
         let time_frame = TimeFrame::Dates(dates);
 
-        let location = HashSet::from_iter(["Miela".to_string()]);
+        let title = title_el
+            .and_then(|el| el.text().next())
+            .map(|t| t.trim().standardize_case(Some(Case::Upper)))
+            .expect("Each event card should have text");
 
-        let (description, summary) =
-            get_description(client, link_el.unwrap().attr("href").unwrap())
-                .await
-                .unwrap_or((None, None));
+        let event_url = link_el.unwrap().attr("href").unwrap();
+        let location = Location::new("Miela", Some(event_url.to_string()));
+        let locations = HashSet::from_iter([location]);
 
-        let event = Event::new(&title, location, CATEGORY_THEATRES)
+        let (description, summary) = get_description(client, event_url)
+            .await
+            .unwrap_or((None, None));
+
+        let event = Event::new(&title, locations, CATEGORY_THEATRES)
             .with_time_frame(Some(time_frame))
             .with_description(description)
             .with_summary(summary);
@@ -124,7 +122,7 @@ async fn get_description(client: &Client, url: &str) -> Result<(Option<String>, 
     let document = Html::parse_document(&html_body);
     let desc_el = document.select(&desc_sel).next();
 
-    if let None = desc_el {
+    if desc_el.is_none() {
         println!("No desc_el");
         return Ok((None, None));
     }

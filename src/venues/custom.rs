@@ -5,7 +5,7 @@ use toml::{Table, Value};
 
 use crate::{
     dates::{DateRange, DateSet, TimeFrame},
-    events::Event,
+    events::{Event, Location},
 };
 
 pub fn fetch(filename: &str, date_range: &DateRange) -> Result<Vec<Event>> {
@@ -63,15 +63,18 @@ fn parse_event_table(table: &Value) -> Result<Option<Event>> {
         .unwrap_or("Altro")
         .to_string();
 
-    let locations = table
+    let loc_arr = table
         .get("locations")
         .and_then(Value::as_array)
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                .collect::<Vec<_>>()
-        })
+        .map(Vec::to_owned)
         .unwrap_or_default();
+    let mut locations = Vec::new();
+    for loc in loc_arr {
+        if let Some(name) = loc["name"].as_str() {
+            let url = loc["url"].as_str().map(|s| s.to_string());
+            locations.push(Location::new(name, url));
+        }
+    }
 
     let time_frame = table.get("date").and_then(|date| parse_date(date));
 

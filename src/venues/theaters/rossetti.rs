@@ -10,7 +10,7 @@ use scraper::{Html, Selector};
 use crate::{
     INFERENCE_SERVICE,
     dates::{DateRange, DateSet, TimeFrame, italian_month_to_number},
-    events::Event,
+    events::{Event, Location},
     inference::SUMMARY_PROMPT,
     utils::PROGRESS_BAR_TEMPLATE,
     venues::{CATEGORY_THEATRES, StandardCasing},
@@ -41,44 +41,41 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
 
     for show in document.select(&shows_sel).progress_with(progress) {
         let link_el = show.select(&link_sel).next();
-        if let None = link_el {
+        let date_el = show.select(&date_sel).next();
+        if link_el.is_none() || date_el.is_none() {
             continue;
         }
-        let title = link_el
-            .and_then(|el| el.text().next())
-            .map(|t| t.trim().standardize_case(Some(Case::Upper)))
-            .expect("Each event card should have text");
 
         // The date is selected just to check if the event is in the current week
         // The real dates in selected in the event's page later
-        let date_el = show.select(&date_sel).next();
-        if let None = date_el {
-            continue;
-        }
         let date_str = date_el
             // First text elem is an empty string (due to the icon probably)
             .and_then(|el| el.text().skip(1).next())
             .map(|t| t.trim().to_string())
             .expect("Second text element should always be the date");
-
         let dates = parse_date(&date_str).expect("Date should be in a standardized format");
-
         if !dates.as_range().overlaps(&date_range) {
             continue;
         }
 
-        let location = HashSet::from_iter(["Rossetti".to_string()]);
+        let title = link_el
+            .and_then(|el| el.text().next())
+            .map(|t| t.trim().standardize_case(Some(Case::Upper)))
+            .expect("Each event card should have text");
 
-        let show_url = format!(
+        let event_url = format!(
             "https://www.ilrossetti.it{}",
             link_el.unwrap().attr("href").unwrap()
         );
-        let (description, summary, dates) = get_description_and_dates(client, &show_url)
+        let location = Location::new("Rossetti", Some(event_url.clone()));
+        let locations = HashSet::from_iter([location]);
+
+        let (description, summary, dates) = get_description_and_dates(client, &event_url)
             .await
             .unwrap_or((None, None, DateSet::today()));
-
         let time_frame = TimeFrame::Dates(dates);
-        let event = Event::new(&title, location, CATEGORY_THEATRES)
+
+        let event = Event::new(&title, locations, CATEGORY_THEATRES)
             .with_time_frame(Some(time_frame))
             .with_description(description)
             .with_summary(summary);

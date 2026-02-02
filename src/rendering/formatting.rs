@@ -2,7 +2,11 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::NaiveDate;
 
-use crate::{dates::TimeFrame, events::Event, rendering::TemplateEvent};
+use crate::{
+    dates::TimeFrame,
+    events::{Event, Location},
+    rendering::TemplateEvent,
+};
 
 /// Films have multiple variants that are saved as different [Event]s, but should visually
 /// be displayed as the same event. For instance, showings of a movie in 2D, in 3D and
@@ -21,12 +25,6 @@ pub(super) fn preprocess_films(events: Vec<Event>) -> Vec<TemplateEvent> {
     let mut results = Vec::new();
 
     for (title, events) in groups.into_iter() {
-        // Put base variant first
-        // events.sort_by(|a, b| a.tags.len().cmp(&b.tags.len()));
-        // Copy description and summary over
-        let description = events[0].description.clone();
-        let summary = events[0].summary.clone();
-
         // Collect all unique tags available for this movie
         let mut all_tags: Vec<String> = events
             .iter()
@@ -54,7 +52,7 @@ pub(super) fn preprocess_films(events: Vec<Event>) -> Vec<TemplateEvent> {
 
         // Aggregate locations
         // Map: Location -> Set of tags available at that location
-        let mut loc_map: HashMap<String, HashSet<String>> = HashMap::new();
+        let mut loc_map: HashMap<Location, HashSet<String>> = HashMap::new();
         for e in &events {
             for loc in &e.locations {
                 loc_map
@@ -64,27 +62,21 @@ pub(super) fn preprocess_films(events: Vec<Event>) -> Vec<TemplateEvent> {
             }
         }
 
-        // Format locations
-        // Result: ["Venue A", "Venue B (also 3D)"]
-        let mut sorted_locs: Vec<String> = loc_map.keys().cloned().collect();
-        sorted_locs.sort();
-
-        let formatted_locations: Vec<String> = sorted_locs
-            .into_iter()
-            .map(|loc| {
-                let tags = &loc_map[&loc];
-                if tags.is_empty() {
-                    loc
-                } else {
-                    let tag_str = tags
-                        .iter()
-                        .map(|t| format!("{}", t))
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    format!("{} ({})", loc, tag_str)
-                }
-            })
-            .collect();
+        // Change location names to include tags
+        // Result: "Venue A" -> "Venue A (anche 3D)"
+        let mut sorted_locs: Vec<Location> = loc_map.keys().cloned().collect();
+        sorted_locs.sort_by(|a, b| a.name.cmp(&b.name));
+        for loc in sorted_locs.iter_mut() {
+            let tags = &loc_map[&loc];
+            if !tags.is_empty() {
+                let tag_str = tags
+                    .iter()
+                    .map(|t| format!("{}", t))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                loc.name = format!("{} ({})", loc.name, tag_str);
+            }
+        }
 
         // Format TimeFrame
         // Result: "il 14/02, 15/02 (anche 3D), 16/02 (anche Originale)"
@@ -115,13 +107,23 @@ pub(super) fn preprocess_films(events: Vec<Event>) -> Vec<TemplateEvent> {
             Some(super::fmt_date_parts(parts))
         };
 
+        // Grab the first non-empty description and summary
+        let description = events
+            .iter()
+            .find(|e| e.description.is_some())
+            .and_then(|e| e.description.clone());
+        let summary = events
+            .iter()
+            .find(|e| e.summary.is_some())
+            .and_then(|e| e.summary.clone());
+
         results.push(TemplateEvent {
             title,
             tags: all_tags,
-            locations: formatted_locations,
+            locations: sorted_locs,
             time_frame: formatted_time_frame,
-            summary,
             description,
+            summary,
         });
     }
 

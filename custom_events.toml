@@ -9,11 +9,16 @@
 # [[events]]
 # title = "Mercatino di Natale"
 # date = "21-12-2025/06-01-2026"
-# locations = ["Cavana", "Ponterosso"]
 # category = "Mercatini"
+# locations = [
+#   { name = "Cavana", url = "https://link.to/event" },
+#   { name = "Ponterosso", url = "https://link.to/other/event" },
+# ]
 #
 # [[events]]
 # title = "Concerto di Natale"
 # date = ["21-12-2025", "23-12-2025"]
-# locations = ["Cavana", "Ponterosso"]
 # category = "Concerti"
+# locations = [
+#   { name = "Cavana", url = "https://link.to/event" },
+# ]
