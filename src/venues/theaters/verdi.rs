@@ -45,13 +45,12 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
             continue;
         }
 
-        let date_str = date_el.and_then(|el| el.text().next()).unwrap();
-        let dates = parse_date(date_str).expect("Date should be in a standardized format");
         // Skip events not in the current week
-        if !dates.as_range().overlaps(&date_range) {
+        let date_str = date_el.and_then(|el| el.text().next()).unwrap();
+        let test_dates = parse_date(date_str);
+        if !test_dates.is_some_and(|set| set.as_range().overlaps(&date_range)) {
             continue;
         }
-        let time_frame = TimeFrame::Dates(dates);
 
         let title = link_el
             .and_then(|el| el.text().next())
@@ -62,9 +61,11 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<Event>
         let location = Location::new("Verdi", Some(event_url.to_string()));
         let locations = HashSet::from_iter([location]);
 
-        let (description, summary) = get_description(client, event_url)
-            .await
-            .unwrap_or((None, None));
+        let (description, summary, dates) =
+            get_description(client, event_url)
+                .await
+                .unwrap_or((None, None, DateSet::today()));
+        let time_frame = TimeFrame::Dates(dates);
 
         let event = Event::new(&title, locations, CATEGORY_THEATRES)
             .with_time_frame(Some(time_frame))
@@ -202,16 +203,37 @@ fn parse_multiple_dates(date_str: &str) -> Option<DateSet> {
     }
 }
 
-async fn get_description(client: &Client, url: &str) -> Result<(Option<String>, Option<String>)> {
+fn parse_simple_date(date_str: &str) -> Option<NaiveDate> {
+    let parts: Vec<&str> = date_str.split_whitespace().collect();
+    let day = parts[0].parse::<u32>().ok()?;
+    let month = italian_month_to_number(parts[1])?;
+    let year = parts[2].parse::<i32>().ok()?;
+    return NaiveDate::from_ymd_opt(year, month, day);
+}
+
+async fn get_description(
+    client: &Client,
+    url: &str,
+) -> Result<(Option<String>, Option<String>, DateSet)> {
     let desc_sel = Selector::parse("section.mnk-block.spettacolo-block:not([id]) div").unwrap();
+    let date_sel =
+        Selector::parse("div.spettacolo-ticket-block.mnk-block span.spettacolo-ticket-date")
+            .unwrap();
 
     let html_body = client.get(url).send().await?.text().await?;
     let document = Html::parse_document(&html_body);
     let desc_els = document.select(&desc_sel);
+    let date_els = document.select(&date_sel);
+
+    let dates = date_els
+        .filter_map(|el| el.text().next())
+        .filter_map(|t| parse_simple_date(t))
+        .collect();
+    let date_set = DateSet::new(dates).expect("Each event should have at least one date");
 
     if desc_els.clone().count() == 0 {
         println!("No desc_els");
-        return Ok((None, None));
+        return Ok((None, None, date_set));
     }
 
     let description = desc_els.fold(String::new(), |acc, el| {
@@ -231,7 +253,7 @@ async fn get_description(client: &Client, url: &str) -> Result<(Option<String>, 
         .inspect_err(|err| eprintln!("Failed to generate summary: {err}"))
         .ok();
 
-    return Ok((Some(description), summary));
+    return Ok((Some(description), summary, date_set));
 }
 
 #[cfg(test)]
