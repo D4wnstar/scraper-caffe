@@ -103,6 +103,10 @@ async fn get_description_and_dates(
         .filter_map(|el| el.text().next().and_then(|t| parse_date(t)))
         .collect();
     dates.dedup();
+    if dates.is_empty() {
+        println!("No date_els");
+        return Ok((None, None, DateSet::today()));
+    }
     let dateset = DateSet::new(dates).unwrap();
 
     if desc_els.clone().count() == 0 {
