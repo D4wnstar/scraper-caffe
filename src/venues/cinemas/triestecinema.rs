@@ -64,6 +64,9 @@ pub async fn fetch(client: &Client, date_range: &DateRange) -> Result<Vec<MovieG
 
             for (title, href) in links {
                 let (title, base_title, tags) = super::clean_title(title, Cinema::TriesteCinema);
+                if title.starts_with("anche al") {
+                    continue;
+                }
                 let id = super::make_id(&base_title, &tags);
 
                 // If the same variant already exists, skip fetching description
