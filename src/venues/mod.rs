@@ -108,6 +108,13 @@ impl StandardCasing for String {
             })
             .to_string();
 
+        // Make roman numerals uppercase
+        text = ROMAN_NUMERALS
+            .replace_all(&text, |caps: &Captures| {
+                caps.get(0).unwrap().as_str().to_uppercase()
+            })
+            .to_string();
+
         // Make the letter after some appropriate apostrophes uppercase
         text = APOSTROPHES
             .replace_all(&text, |caps: &Captures| {
@@ -143,6 +150,8 @@ lazy_static! {
         r"(?i)(?<=.)(?<![.:;] )\b(il|la?|le|gli|una?|ad?|ed?|i|o|di?|in|con|per|tra|fra|si|(?:a|da|de|su|ne)(?:i|l|ll|lla|lle|gli)?)\b"
     )
     .unwrap();
+
+    static ref ROMAN_NUMERALS: Regex = Regex::new(r"(?i) (ii|iii|iv|vi|vii|viii|ix)").unwrap();
     static ref APOSTROPHES: Regex = Regex::new(r"(?i)\b(l|d|s|un|(?:a|da|de|su|ne)ll)(?:'|’)(\w)").unwrap();
     static ref QUOTES: Regex = Regex::new(r#"("|“|”)\w"#).unwrap();
     static ref QUOTES_FANCY: Regex = Regex::new(r#""(.*?)""#).unwrap();

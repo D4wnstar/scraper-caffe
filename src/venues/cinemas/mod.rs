@@ -14,7 +14,7 @@ use crate::{dates::DateRange, events::Event, venues::CacheManager};
 lazy_static! {
     static ref UPPERCASE_MATCHER: Regex = Regex::new(r"^[a-z]*([^a-z]+)\b").unwrap();
     static ref ORIGINAL_LANG: Regex = Regex::new(r"(?i)In [\w\d ]+ Con S\.+t\.+ Italiani").unwrap();
-    static ref ORIGINAL_LANG_2: Regex = Regex::new(r"(?i)lingua originale").unwrap();
+    static ref ORIGINAL_LANG_2: Regex = Regex::new(r"(?i)(: )?lingua originale").unwrap();
     static ref HYPHENS: Regex = Regex::new(r" *\- +").unwrap();
     static ref PERIODS: Regex = Regex::new(r"(\b| +)\. +").unwrap();
     static ref SPACE_NUKE: Regex = Regex::new(r"(\s){2,}").unwrap();
@@ -129,17 +129,20 @@ pub(super) fn clean_title(title: &str, cinema: Cinema) -> (String, String, HashS
         Cinema::TheSpace => {}
     }
 
-    new_title = new_title
-        .to_lowercase()
-        .replace("a'", "à")
-        .replace("e'", "è")
-        .trim()
-        .to_string();
+    new_title = new_title.to_lowercase().to_string();
 
     new_title = HYPHENS.replace_all(&new_title, ": ").to_string();
     new_title = PERIODS.replace_all(&new_title, ": ").to_string();
     new_title = SPACE_NUKE.replace_all(&new_title, "$1").to_string();
     new_title = ORIGINAL_LANG_2.replace_all(&new_title, "$1").to_string();
+
+    new_title = new_title
+        .replace("a'", "à")
+        .replace("e'", "è")
+        .trim()
+        .trim_end_matches("-")
+        .trim_end_matches(":")
+        .to_string();
 
     // Possible tags
     let mut tags: HashSet<String> = HashSet::new();
